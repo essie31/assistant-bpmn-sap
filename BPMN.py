@@ -204,7 +204,7 @@ if check_password():
     tab1, tab2 = st.tabs(["📊 Évaluation & Radar", "💬 Assistant Configuration SAP"])
 
     with tab1:
-        st.write("Importez votre processus. 🖨️ *Astuce : Faites Ctrl+P pour imprimer un rapport propre une fois généré.*")
+        st.write("Importez votre processus. 🖨️ *Astuce : Faites Ctrl+P pour Windows ou Cmd+P pour Mac, pour imprimer un rapport propre une fois généré.*")
         uploaded_file = st.file_uploader("Importez votre fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
