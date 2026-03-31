@@ -168,9 +168,12 @@ if check_password():
         """
         # NOUVELLE FAÇON D'APPELER L'API GOOGLE
         response = client.models.generate_content(
-            model=MODEL_NAME,
-            contents=prompt
-        )
+    model=MODEL_NAME,
+    contents=chat_context,
+    config=genai.types.GenerateContentConfig(
+        temperature=0.1, # <-- Proche de zéro = factuel et sans imagination
+    )
+)
         return response.text
 
     def draw_radar_chart(json_str):
