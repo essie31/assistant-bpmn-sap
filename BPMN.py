@@ -36,7 +36,7 @@ st.markdown("""
 # 🔒 SYSTÈME DE SÉCURITÉ (LOGIN) via Secrets
 # ==========================================
 # Va chercher le mot de passe dans le coffre-fort de Streamlit
-CODE_SECRET = "LAVASSER2026"
+CODE_SECRET = st.secrets["APP_PASSWORD"]
 
 def check_password():
     def password_entered():
@@ -64,7 +64,7 @@ if check_password():
     # ==========================================
     # 🔑 CLÉ API via Secrets
     # ==========================================
-    API_KEY = "AIzaSyBHxSJmtcXKG9ZniRP_18y_LT0p0dZ3BQM"
+    API_KEY = st.secrets["API_KEY"]
     genai.configure(api_key=API_KEY)
 
     # 📌 Nom du modèle forcé (Empêche l'erreur NotFound 404)
