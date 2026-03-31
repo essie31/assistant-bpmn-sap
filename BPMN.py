@@ -1,6 +1,7 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-from google import genai # La TOUTE NOUVELLE bibliothèque
+from google import genai
+from google.genai import types # NOUVEAU : Permet de configurer la "température" de l'IA
 import plotly.express as px
 import pandas as pd
 import json
@@ -166,14 +167,14 @@ if check_password():
         }}
         ```
         """
-        # NOUVELLE FAÇON D'APPELER L'API GOOGLE
+        # APPEL API AVEC TEMPÉRATURE BASSE (0.1) POUR UN RAPPORT PLUS FACTUEL
         response = client.models.generate_content(
-    model=MODEL_NAME,
-    contents=chat_context,
-    config=genai.types.GenerateContentConfig(
-        temperature=0.1, # <-- Proche de zéro = factuel et sans imagination
-    )
-)
+            model=MODEL_NAME,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                temperature=0.1,
+            )
+        )
         return response.text
 
     def draw_radar_chart(json_str):
@@ -261,8 +262,13 @@ if check_password():
                     st.markdown(user_prompt)
                 st.session_state.chat_history.append({"role": "user", "content": user_prompt})
 
+                # PROMPT SÉCURISÉ ET STRICT POUR ÉVITER LES HALLUCINATIONS SAP
                 chat_context = f"""
                 Tu es un consultant expert SAP Business One 10.0. L'utilisateur te pose une question sur son processus métier.
+                
+                RÈGLE N°1 : Tes réponses doivent s'appliquer STRICTEMENT ET UNIQUEMENT à SAP Business One 10.0. Ne donne jamais de chemins de menus provenant de SAP S/4HANA ou SAP ECC.
+                RÈGLE N°2 : Si tu n'es pas absolument certain du chemin exact du menu dans SAP B1, ou si la fonctionnalité n'existe pas en standard, TU DOIS dire 'Je ne suis pas certain' ou 'Cette fonction n'existe pas en standard'. N'invente JAMAIS de menus ou de cases à cocher.
+                
                 Voici les données de son processus actuel :
                 {st.session_state.bpmn_context}
                 
@@ -272,10 +278,13 @@ if check_password():
 
                 with st.chat_message("assistant"):
                     with st.spinner("Réflexion..."):
-                        # NOUVELLE FAÇON D'APPELER LE CHAT
+                        # APPEL API AVEC TEMPÉRATURE BASSE (0.1) POUR LE CHAT
                         response = client.models.generate_content(
                             model=MODEL_NAME,
-                            contents=chat_context
+                            contents=chat_context,
+                            config=types.GenerateContentConfig(
+                                temperature=0.1,
+                            )
                         )
                         st.markdown(response.text)
                 
