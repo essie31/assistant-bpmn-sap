@@ -138,7 +138,8 @@ if check_password():
           * **Proposition d'automatisation :** [Détail]
 
         ### 4. 🏭 Matrice d'Évaluation Industrie 4.0 (Les 9 Piliers)
-        Génère UN SEUL grand tableau Markdown évaluant TOUTES les tâches listées au début du prompt. Interdiction d'en oublier une seule.
+        Génère UN SEUL grand tableau Markdown. 
+        ATTENTION EXTRÊME : Ne liste pas toutes les tâches ! Sélectionne UNIQUEMENT les 10 à 15 tâches les plus stratégiques et pertinentes vis-à-vis de l'Industrie 4.0 (production, data, goulots d'étranglement).
         Colonnes du tableau : 
         `Tâche BPMN` | `Big Data` | `Robots` | `Simulation` | `Intégration` | `IIoT` | `Cyber.` | `Cloud` | `Additif` | `RA` | `Justification Globale`.
         Consignes :
@@ -166,6 +167,7 @@ if check_password():
             contents=prompt,
             config=types.GenerateContentConfig(
                 temperature=0.1,
+                max_output_tokens=8192,
             )
         )
         return response.text
@@ -201,7 +203,7 @@ if check_password():
 
         if uploaded_file is not None:
             if st.button("Lancer l'évaluation complète", type="primary"):
-                with st.spinner("Analyse et génération de la Matrice I4.0 en cours..."):
+                with st.spinner("Analyse et génération de la Matrice I4.0 en cours avec Gemini 2.5 Flash..."):
                     tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
                     
                     if tasks_text is None:
@@ -234,7 +236,7 @@ if check_password():
                                 if fig:
                                     st.plotly_chart(fig, use_container_width=True)
                         else:
-                            st.warning("Le graphique radar n'a pas pu être généré.")
+                            st.warning("Le graphique radar n'a pas pu être généré (Rapport coupé ou format JSON invalide).")
 
     with tab2:
         st.header("Discutez avec votre Consultant SAP B1")
