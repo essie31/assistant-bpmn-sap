@@ -209,7 +209,7 @@ if check_password():
 
         if uploaded_file is not None:
             if st.button("Lancer l'évaluation complète", type="primary"):
-                with st.spinner("Analyse et génération du radar en cours avec Gemini 2.5 Flash..."):
+                with st.spinner("Analyse et génération du radar en cours..."):
                     tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
                     
                     if tasks_text is None:
