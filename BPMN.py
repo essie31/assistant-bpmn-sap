@@ -38,7 +38,7 @@ st.markdown("""
 # ==========================================
 # 🔒 SYSTÈME DE SÉCURITÉ (LOGIN)
 # ==========================================
-CODE_SECRET = "LAVASSER2026"
+CODE_SECRET = st.secrets["APP_PASSWORD"]
 
 def check_password():
     """Retourne True si l'utilisateur a entré le bon code."""
@@ -67,7 +67,7 @@ if check_password():
     # ==========================================
     # 🔑 CLÉ API (Sécurisée par le dépôt privé GitHub)
     # ==========================================
-    API_KEY = "AIzaSyBHxSJmtcXKG9ZniRP_18y_LT0p0dZ3BQM"
+    API_KEY = st.secrets["API_KEY"]
 
     def parse_bpmn_from_file(file_object):
         """Extrait les éléments et les flux localement."""
