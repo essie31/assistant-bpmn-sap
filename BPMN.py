@@ -111,6 +111,7 @@ if check_password():
         return "\n".join(tasks_list), "\n".join(flows)
 
     def generate_full_analysis(tasks_text, flows_text):
+        # PROMPT OPTIMISÉ POUR NE PAS FAIRE PLANTER LA LIMITE DE MOTS
         prompt = f"""
         Tu es un assistant expert combinant trois rôles : Analyste BPMN, Expert Industrie 4.0, et Consultant SAP B1 10.0.
         Voici les données du BPMN :
@@ -138,10 +139,10 @@ if check_password():
           * **Proposition d'automatisation :** [Détail]
 
         ### 4. 🏭 Évaluation des Tâches selon les 9 Piliers (Industrie 4.0)
-        Génère 9 petits tableaux Markdown, un pour chaque pilier de l'Industrie 4.0 : 
-        (1. Big Data/Analytics, 2. Robots Autonomes, 3. Simulation, 4. Intégration Systèmes, 5. IIoT, 6. Cybersécurité, 7. Cloud, 8. Fabrication Additive, 9. Réalité Augmentée).
-        ATTENTION EXTRÊME : Pour CHACUN des 9 tableaux, tu dois IMPÉRATIVEMENT évaluer TOUTES les tâches listées au début du prompt, sans AUCUNE exception. Si j'ai fourni 10 tâches, chaque tableau doit comporter exactement 10 lignes. Interdiction absolue de résumer ou de regrouper les tâches.
+        Génère 9 petits tableaux Markdown (un par pilier).
+        CONTRAINTE DE MÉMOIRE STRICTE : Tu dois évaluer TOUTES les tâches listées, mais tu dois être extrêmement bref pour ne pas couper la réponse.
         Colonnes du tableau : `Tâche BPMN` | `Score (1-5)` | `Justification`.
+        RÈGLE ABSOLUE POUR LA JUSTIFICATION : Rédige en style télégraphique de 4 MOTS MAXIMUM par case (ex: "Automatisation par capteurs", "Données cloud utiles", "Non pertinent ici").
 
         ### 5. SCORES_JSON
         À la toute fin, inclut un bloc JSON valide avec la note globale moyenne de 1 à 5 du processus entier pour les 9 piliers. Il ne doit y avoir aucun texte après ce bloc.
@@ -200,7 +201,7 @@ if check_password():
 
         if uploaded_file is not None:
             if st.button("Lancer l'évaluation complète", type="primary"):
-                with st.spinner("Analyse et génération du radar en cours..."):
+                with st.spinner("Analyse et génération du radar en cours avec Gemini 2.5 Flash..."):
                     tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
                     
                     if tasks_text is None:
