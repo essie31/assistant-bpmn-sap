@@ -26,7 +26,7 @@ st.markdown("""
         display: none !important;
     }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    table { page-break-inside: auto; width: 100% !important; font-size: 11px; }
+    table { page-break-inside: auto; width: 100% !important; }
     tr { page-break-inside: avoid; page-break-after: auto; }
     h2, h3 { page-break-after: avoid; }
 }
@@ -137,14 +137,11 @@ if check_password():
           * **Chemin de navigation :** [Chemin]
           * **Proposition d'automatisation :** [Détail]
 
-        ### 4. 🏭 Matrice d'Évaluation Industrie 4.0 (Les 9 Piliers)
-        Génère UN SEUL grand tableau Markdown. 
-        ATTENTION EXTRÊME : Ne liste pas toutes les tâches ! Sélectionne UNIQUEMENT les 10 à 15 tâches les plus stratégiques et pertinentes vis-à-vis de l'Industrie 4.0 (production, data, goulots d'étranglement).
-        Colonnes du tableau : 
-        `Tâche BPMN` | `Big Data` | `Robots` | `Simulation` | `Intégration` | `IIoT` | `Cyber.` | `Cloud` | `Additif` | `RA` | `Justification Globale`.
-        Consignes :
-        - Pour chaque tâche (ligne), attribue un score de 1 à 5 sous chaque pilier (les 9 colonnes du milieu).
-        - La dernière colonne `Justification Globale` doit contenir UNE courte phrase expliquant les notes.
+        ### 4. 🏭 Évaluation des Tâches selon les 9 Piliers (Industrie 4.0)
+        Génère 9 petits tableaux Markdown, un pour chaque pilier de l'Industrie 4.0 : 
+        (1. Big Data/Analytics, 2. Robots Autonomes, 3. Simulation, 4. Intégration Systèmes, 5. IIoT, 6. Cybersécurité, 7. Cloud, 8. Fabrication Additive, 9. Réalité Augmentée).
+        ATTENTION EXTRÊME : Pour CHACUN des 9 tableaux, tu dois IMPÉRATIVEMENT évaluer TOUTES les tâches listées au début du prompt, sans AUCUNE exception. Si j'ai fourni 10 tâches, chaque tableau doit comporter exactement 10 lignes. Interdiction absolue de résumer ou de regrouper les tâches.
+        Colonnes du tableau : `Tâche BPMN` | `Score (1-5)` | `Justification`.
 
         ### 5. SCORES_JSON
         À la toute fin, inclut un bloc JSON valide avec la note globale moyenne de 1 à 5 du processus entier pour les 9 piliers. Il ne doit y avoir aucun texte après ce bloc.
@@ -203,7 +200,7 @@ if check_password():
 
         if uploaded_file is not None:
             if st.button("Lancer l'évaluation complète", type="primary"):
-                with st.spinner("Analyse et génération de la Matrice I4.0 en cours avec Gemini 2.5 Flash..."):
+                with st.spinner("Analyse et génération du radar en cours avec Gemini 2.5 Flash..."):
                     tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
                     
                     if tasks_text is None:
@@ -217,26 +214,29 @@ if check_password():
                         
                         st.success("Analyse générée ! Vous pouvez imprimer cette page (Ctrl+P) ou (Cmd+P sur Mac).")
                         
-                        # Affichage du rapport complet en PLEINE LARGEUR
-                        st.markdown(clean_report)
+                        col_text, col_radar = st.columns([2, 1])
                         
-                        st.divider() # Ajoute une belle ligne de séparation
-                        
-                        # Affichage du radar CENTRÉ en bas
-                        if json_match:
-                            st.subheader("📊 Radar des Scores Globaux (9 Piliers)")
+                        with col_text:
+                            st.markdown(clean_report)
                             
-                            json_data = json_match.group(1)
-                            
-                            # Création de 3 colonnes pour centrer le graphique au milieu
-                            col_vide1, col_centre, col_vide2 = st.columns([1, 2, 1])
-                            
-                            with col_centre:
+                        with col_radar:
+                            if json_match:
+                                json_data = json_match.group(1)
+                                
+                                st.subheader("📊 Scores Globaux (9 Piliers)")
+                                
+                                try:
+                                    scores_dict = json.loads(json_data)
+                                    df_scores = pd.DataFrame(list(scores_dict.items()), columns=['Pilier 4.0', 'Note globale'])
+                                    st.dataframe(df_scores, hide_index=True, use_container_width=True)
+                                except Exception as e:
+                                    st.error(f"Erreur d'affichage : {e}")
+
                                 fig = draw_radar_chart(json_data)
                                 if fig:
                                     st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.warning("Le graphique radar n'a pas pu être généré (Rapport coupé ou format JSON invalide).")
+                            else:
+                                st.warning("Le graphique radar n'a pas pu être généré (Rapport coupé ou format JSON invalide).")
 
     with tab2:
         st.header("Discutez avec votre Consultant SAP B1")
