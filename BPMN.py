@@ -112,17 +112,9 @@ if check_password():
         return "\n".join(tasks_list), "\n".join(flows)
 
     def get_best_model():
-        """Trouve le meilleur modèle disponible."""
+        """Force l'utilisation du modèle Google le plus récent et rapide."""
         genai.configure(api_key=API_KEY)
-        valid_model_name = 'gemini-pro' 
-        try:
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    if 'flash' in m.name: return m.name
-                    elif 'pro' in m.name: valid_model_name = m.name
-        except:
-            pass
-        return valid_model_name
+        return "gemini-1.5-flash"
 
     def generate_full_analysis(tasks_text, flows_text):
         """Génère le rapport ET les scores JSON pour les 9 piliers."""
