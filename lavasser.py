@@ -2,13 +2,12 @@ import streamlit as st
 import xml.etree.ElementTree as ET
 from google import genai
 from google.genai import types 
-import time
 
 # --- Configuration de la page ---
 st.set_page_config(page_title="App 1 : Analyse & Architecture SAP", page_icon="📊", layout="wide")
 
 # ==========================================
-# 🔒 SÉCURITÉ
+# 🔒 SYSTÈME DE SÉCURITÉ
 # ==========================================
 CODE_SECRET = st.secrets["APP_PASSWORD"] 
 
@@ -20,31 +19,24 @@ def check_password():
             if pwd == CODE_SECRET:
                 st.session_state["password_correct"] = True
                 st.rerun()
-            else:
-                st.error("😕 Code d'accès incorrect.")
+            else: st.error("😕 Code d'accès incorrect.")
         return False
     return True
 
 if check_password():
     
-    # --- BARRE LATÉRALE ---
     with st.sidebar:
         st.title("🚀 Navigation")
-        st.info("App 1 : Analyse d'Architecture")
-        # Lien vers l'App 2 (Chat) à configurer
-        st.link_button("💬 Assistant de Configuration (App 2)", "https://votre-app-chat.streamlit.app")
-        st.divider()
+        st.link_button("💬 App 2 : Assistant Chat", "https://votre-app-chat.streamlit.app")
 
     # ==========================================
-    # 🔑 CONFIGURATION GOOGLE
+    # 🔑 CONFIGURATION GOOGLE (VERSION ROBUSTE)
     # ==========================================
-    try:
-        API_KEY = st.secrets["API_KEY"] 
-        client = genai.Client(api_key=API_KEY)
-        # Changement du nom du modèle pour la version la plus stable
-        MODEL_NAME = 'gemini-1.5-flash' 
-    except Exception as e:
-        st.error("Problème de clé API.")
+    API_KEY = st.secrets["API_KEY"] 
+    client = genai.Client(api_key=API_KEY)
+    
+    # Utilisation du nom de ressource complet pour éviter l'erreur 404
+    MODEL_NAME = 'models/gemini-1.5-flash'
 
     def parse_bpmn_from_file(file_object):
         try:
@@ -81,24 +73,28 @@ if check_password():
         Génère un rapport d'architecture technique exhaustif avec :
         1. 📊 Tableau des Tâches & Rôles.
         2. 📝 Analyse Logique & Métier (Détaillée).
-        3. 🔵 Architecture SAP B1 10.0 (Objet Technique, Chemin Menu standard, Données Maîtres et Impact Stock/Compta).
+        3. 🔵 Architecture SAP B1 10.0 (Objet Technique, Chemin Menu, Données Maîtres et Impact Stock/Compta).
         """
         try:
-            # Appel API avec le nom de modèle corrigé
+            # Appel API avec le préfixe 'models/'
             response = client.models.generate_content(
                 model=MODEL_NAME, 
-                contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.1)
+                contents=prompt
             )
             return response.text
         except Exception as e:
-            return f"❌ Erreur lors de la génération : {str(e)}"
+            # Si le nom complet échoue aussi, on tente le nom simple (Double sécurité)
+            try:
+                response = client.models.generate_content(model='gemini-1.5-flash', contents=prompt)
+                return response.text
+            except:
+                return f"❌ Erreur persistante de l'API Google : {str(e)}"
 
     # ==========================================
     # 🏁 UI PRINCIPALE
     # ==========================================
-    st.title("🏭 Hub d'Analyse Métier ➔ Architecture SAP B1")
-    uploaded_file = st.file_uploader("Fichier .bpmn ou .xml", type=['bpmn', 'xml'])
+    st.title("Hub d'Analyse Métier ➔ SAP B1")
+    uploaded_file = st.file_uploader("Fichier .bpmn", type=['bpmn', 'xml'])
 
     if uploaded_file:
         if st.button("🚀 Générer l'Analyse SAP", type="primary"):
@@ -108,4 +104,4 @@ if check_password():
                     report = generate_detailed_analysis(tasks_txt, flows_txt)
                     st.markdown(report)
                 else:
-                    st.error("Fichier invalide.")
+                    st.error("Erreur de lecture du fichier.")
