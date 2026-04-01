@@ -6,7 +6,7 @@ import pandas as pd
 import json
 import re
 
-# --- Configuration de la page ---
+# --- Configuration de la page (Doit TOUJOURS être la première commande) ---
 st.set_page_config(page_title="Assistant BPMN & SAP B1", page_icon="🏭", layout="wide")
 
 # ==========================================
@@ -117,12 +117,16 @@ if check_password():
             pass
         return valid_model_name
 
-    # --- FONCTION ÉTAPE 1 : SAP & LOGIQUE ---
+    # ==========================================
+    # 🤖 FONCTIONS DE GÉNÉRATION (LES 3 ÉTAPES)
+    # ==========================================
+
+    # --- ÉTAPE 1 : SAP & LOGIQUE ---
     def generate_part1_analysis(tasks_text, flows_text):
         model = genai.GenerativeModel(get_best_model())
         prompt = f"""
         Tu es un assistant expert combinant les rôles d'Analyste BPMN et Consultant SAP B1 10.0.
-        Voici les données du BPMN :
+        Voici les données du processus :
         
         TÂCHES :
         {tasks_text}
@@ -146,32 +150,38 @@ if check_password():
           * **Chemin de navigation :** [Chemin]
           * **Proposition d'automatisation :** [Détail]
         """
-        # Utilisation d'un dictionnaire simple pour la config pour éviter les bugs
-        response = model.generate_content(
-            prompt,
-            generation_config={"temperature": 0.1}
-        )
+        response = model.generate_content(prompt, generation_config={"temperature": 0.1})
         return response.text
 
-    # --- FONCTION ÉTAPE 2 : MATRICE UNIQUE & RADAR ---
-    def generate_part2_evaluation(tasks_text, flows_text):
+    # --- ÉTAPE 2 : LES 9 TABLEAUX ---
+    def generate_part2_evaluation(tasks_text):
         model = genai.GenerativeModel(get_best_model())
         prompt = f"""
-        Tu es un Expert Industrie 4.0.
-        Voici les données du BPMN :
-        
-        TÂCHES :
+        Tu es un Expert Industrie 4.0. Évalue les tâches suivantes :
         {tasks_text}
 
-        Génère EXACTEMENT ces 2 parties en français :
+        Génère EXACTEMENT cette partie en français :
 
-        ### 4. 🏭 Matrice d'Évaluation Industrie 4.0 (Les 9 Piliers)
-        Génère UN SEUL grand tableau Markdown évaluant TOUTES les tâches listées au début du prompt, sans AUCUNE exception.
-        Colonnes du tableau : `Tâche` | `Big Data` | `Robots` | `Simul.` | `Intégr.` | `IIoT` | `Cyber.` | `Cloud` | `Additif` | `RA` | `Justification`.
-        CONTRAINTE VITALE POUR LA MÉMOIRE : Pour chaque tâche (ligne), attribue un score de 1 à 5 sous chaque pilier. La colonne `Justification` doit faire 3 MOTS MAXIMUM en style télégraphique (ex: "Fort potentiel", "Processus manuel").
+        ### 4. 🏭 Évaluation des Tâches selon les 9 Piliers (Industrie 4.0)
+        Génère 9 petits tableaux Markdown, un pour chaque pilier de l'Industrie 4.0 (Big Data, Robots, Simulation, Intégration, IIoT, Cybersécurité, Cloud, Additif, Réalité Augmentée).
+        
+        RÈGLE ABSOLUE : Tu dois évaluer TOUTES les tâches listées au début du prompt dans CHACUN des 9 tableaux. Ne saute AUCUNE tâche.
+        Colonnes du tableau : `Tâche BPMN` | `Score (1-5)` | `Justification`.
+        ASTUCE: Rédige des justifications très courtes (3 mots max).
+        """
+        response = model.generate_content(prompt, generation_config={"temperature": 0.1})
+        return response.text
 
-        ### 5. SCORES_JSON
-        À la toute fin, inclut un bloc JSON valide avec la note globale moyenne de 1 à 5 du processus entier pour les 9 piliers. Il ne doit y avoir aucun texte après ce bloc.
+    # --- ÉTAPE 3 : JSON & RADAR ---
+    def generate_part3_radar(tasks_text):
+        model = genai.GenerativeModel(get_best_model())
+        prompt = f"""
+        Sur la base de ces tâches :
+        {tasks_text}
+
+        Calcule la note globale moyenne de 1 à 5 du processus entier pour les 9 piliers de l'industrie 4.0.
+        Génère UNIQUEMENT un bloc JSON valide. Il ne doit y avoir AUCUN texte avant ou après ce bloc.
+        
         ```json
         {{
           "Big Data": 2,
@@ -186,10 +196,7 @@ if check_password():
         }}
         ```
         """
-        response = model.generate_content(
-            prompt,
-            generation_config={"temperature": 0.1, "max_output_tokens": 8192}
-        )
+        response = model.generate_content(prompt, generation_config={"temperature": 0.1})
         return response.text
 
     def draw_radar_chart(json_str):
@@ -207,118 +214,133 @@ if check_password():
         except Exception as e:
             return None
 
-    # --- INITIALISATION DE LA MÉMOIRE (SESSION STATE) ---
+    # ==========================================
+    # 💾 INITIALISATION DE LA MÉMOIRE (SESSION)
+    # ==========================================
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
     if "bpmn_context" not in st.session_state:
         st.session_state.bpmn_context = ""
-    if "part1_done" not in st.session_state:
-        st.session_state.part1_done = False
+    if "bpmn_tasks_only" not in st.session_state:
+        st.session_state.bpmn_tasks_only = ""
     if "part1_text" not in st.session_state:
         st.session_state.part1_text = ""
-    if "part2_done" not in st.session_state:
-        st.session_state.part2_done = False
     if "part2_text" not in st.session_state:
         st.session_state.part2_text = ""
+    if "part3_text" not in st.session_state:
+        st.session_state.part3_text = ""
 
     st.title("💡 Hub d'Intégration : BPMN ➔ SAP Business One 10.0")
 
-    tab1, tab2 = st.tabs(["📊 Évaluation & Radar", "💬 Assistant Configuration SAP"])
+    tab1, tab2 = st.tabs(["📊 Évaluation en 3 Étapes", "💬 Assistant SAP"])
 
     with tab1:
         st.write("Importez votre processus. 🖨️ *Astuce : Faites Ctrl+P pour imprimer un rapport propre.*")
         uploaded_file = st.file_uploader("Importez votre fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
-            # Réinitialisation
+            # Réinitialisation pour un nouveau fichier
             if st.button("🔄 Réinitialiser l'analyse pour un nouveau fichier"):
-                st.session_state.part1_done = False
-                st.session_state.part2_done = False
                 st.session_state.part1_text = ""
                 st.session_state.part2_text = ""
+                st.session_state.part3_text = ""
+                st.rerun()
 
-            # --- BOUTON 1 ---
-            if not st.session_state.part1_done:
-                if st.button("1️⃣ Générer l'Analyse Métier & Intégration SAP", type="primary"):
-                    with st.spinner("Analyse métier et SAP en cours... (Étape 1/2)"):
-                        tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
-                        if tasks_text is None:
-                            st.error(flows_text)
-                        else:
-                            st.session_state.bpmn_context = f"TÂCHES:\n{tasks_text}\n\nFLUX:\n{flows_text}"
-                            try:
-                                st.session_state.part1_text = generate_part1_analysis(tasks_text, flows_text)
-                                st.session_state.part1_done = True
-                            except Exception as e:
-                                st.error(f"🔴 Erreur IA (Étape 1) : {e}")
+            # Extraction des données si ce n'est pas déjà fait
+            if not st.session_state.bpmn_context:
+                tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
+                if tasks_text is None:
+                    st.error(flows_text)
+                else:
+                    st.session_state.bpmn_context = f"TÂCHES:\n{tasks_text}\n\nFLUX:\n{flows_text}"
+                    st.session_state.bpmn_tasks_only = tasks_text
 
-            # --- AFFICHAGE PARTIE 1 ---
-            if st.session_state.part1_done:
-                st.success("✅ Étape 1 terminée ! Voici l'analyse métier et SAP.")
+            st.divider()
+            
+            # --- AFFICHAGE DES 3 BOUTONS EN COLONNES ---
+            col_btn1, col_btn2, col_btn3 = st.columns(3)
+
+            with col_btn1:
+                if st.button("1️⃣ Analyse Métier & SAP", use_container_width=True):
+                    with st.spinner("Analyse métier et SAP en cours..."):
+                        try:
+                            st.session_state.part1_text = generate_part1_analysis(st.session_state.bpmn_tasks_only, st.session_state.bpmn_context)
+                        except Exception as e:
+                            st.error(f"🔴 Erreur IA (Étape 1) : {e}")
+
+            with col_btn2:
+                if st.button("2️⃣ Les 9 Tableaux de Scoring", use_container_width=True):
+                    with st.spinner("Création des 9 tableaux d'évaluation..."):
+                        try:
+                            st.session_state.part2_text = generate_part2_evaluation(st.session_state.bpmn_tasks_only)
+                        except Exception as e:
+                            st.error(f"🔴 Erreur IA (Étape 2) : {e}")
+
+            with col_btn3:
+                if st.button("3️⃣ Résultats Globaux & Radar", use_container_width=True):
+                    with st.spinner("Calcul des notes finales et du Radar..."):
+                        try:
+                            st.session_state.part3_text = generate_part3_radar(st.session_state.bpmn_tasks_only)
+                        except Exception as e:
+                            st.error(f"🔴 Erreur IA (Étape 3) : {e}")
+
+            st.divider()
+
+            # --- AFFICHAGE DES RÉSULTATS ---
+            if st.session_state.part1_text:
                 st.markdown(st.session_state.part1_text)
                 st.divider()
 
-                # --- BOUTON 2 ---
-                if not st.session_state.part2_done:
-                    if st.button("2️⃣ Générer la Matrice Industrie 4.0 & le Radar", type="primary"):
-                        with st.spinner("Création de la Matrice I4.0 et du Radar... (Étape 2/2)"):
-                            context_parts = st.session_state.bpmn_context.split("\n\nFLUX:\n")
-                            tasks_text = context_parts[0].replace("TÂCHES:\n", "")
-                            flows_text = context_parts[1] if len(context_parts) > 1 else ""
+            if st.session_state.part2_text:
+                st.markdown(st.session_state.part2_text)
+                st.divider()
 
-                            try:
-                                st.session_state.part2_text = generate_part2_evaluation(tasks_text, flows_text)
-                                st.session_state.part2_done = True
-                            except Exception as e:
-                                st.error(f"🔴 Erreur IA (Étape 2) : {e}")
-
-                # --- AFFICHAGE PARTIE 2 ---
-                if st.session_state.part2_done:
-                    st.success("✅ Étape 2 terminée ! Vous pouvez maintenant imprimer (Ctrl+P).")
+            if st.session_state.part3_text:
+                st.subheader("📊 Scores Globaux (9 Piliers)")
+                report_part3 = st.session_state.part3_text
+                json_match = re.search(r'```json\n(.*?)\n```', report_part3, re.DOTALL)
+                
+                if json_match:
+                    json_data = json_match.group(1)
                     
-                    report_part2 = st.session_state.part2_text
-                    json_match = re.search(r'```json\n(.*?)\n```', report_part2, re.DOTALL)
-                    clean_report_part2 = re.sub(r'### 5\. SCORES_JSON.*', '', report_part2, flags=re.DOTALL)
-                    
-                    # Affichage pleine largeur de la Matrice
-                    st.markdown(clean_report_part2)
-                    st.divider()
-                    
-                    # Radar et Tableau global centrés en bas
-                    if json_match:
-                        json_data = json_match.group(1)
-                        st.subheader("📊 Scores Globaux (9 Piliers)")
-                        
-                        col_vide1, col_centre, col_vide2 = st.columns([1, 2, 1])
-                        with col_centre:
-                            try:
-                                scores_dict = json.loads(json_data)
-                                df_scores = pd.DataFrame(list(scores_dict.items()), columns=['Pilier 4.0', 'Note globale'])
-                                st.dataframe(df_scores, hide_index=True, use_container_width=True)
-                            except Exception as e:
-                                st.error(f"Erreur d'affichage du tableau : {e}")
+                    col_vide1, col_centre, col_vide2 = st.columns([1, 2, 1])
+                    with col_centre:
+                        try:
+                            scores_dict = json.loads(json_data)
+                            df_scores = pd.DataFrame(list(scores_dict.items()), columns=['Pilier 4.0', 'Note globale'])
+                            st.dataframe(df_scores, hide_index=True, use_container_width=True)
+                        except Exception as e:
+                            st.error(f"Erreur d'affichage du tableau : {e}")
 
-                            fig = draw_radar_chart(json_data)
-                            if fig:
-                                st.plotly_chart(fig, use_container_width=True)
-                    else:
-                        st.warning("Le graphique radar n'a pas pu être généré. (Erreur format JSON)")
+                        fig = draw_radar_chart(json_data)
+                        if fig:
+                            st.plotly_chart(fig, use_container_width=True)
+                else:
+                    st.warning("Le graphique radar n'a pas pu être généré. Format JSON introuvable.")
 
+    # ==========================================
+    # 💬 ONGLETS 2 : LE CHAT EXPERT SÉCURISÉ
+    # ==========================================
     with tab2:
         st.header("Discutez avec votre Consultant SAP B1")
         
+        # Affichage de l'historique
         for message in st.session_state.chat_history:
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
+        # Zone de saisie
         if user_prompt := st.chat_input("Posez votre question sur SAP B1..."):
             if not st.session_state.bpmn_context:
-                st.warning("Veuillez d'abord lancer l'étape 1 dans l'onglet 'Évaluation & Radar'.")
+                st.warning("Veuillez d'abord importer un fichier dans le premier onglet.")
             else:
                 with st.chat_message("user"):
                     st.markdown(user_prompt)
+                
+                # Sauvegarde de la question de l'utilisateur
                 st.session_state.chat_history.append({"role": "user", "content": user_prompt})
 
+                # Bouclier anti-hallucinations SAP B1
                 chat_context = f"""
                 Tu es un consultant expert SAP Business One 10.0. L'utilisateur te pose une question sur son processus métier.
                 
@@ -337,11 +359,13 @@ if check_password():
                         try:
                             model_name = get_best_model()
                             model = genai.GenerativeModel(model_name)
+                            # Température basse pour un chat factuel
                             response = model.generate_content(
                                 chat_context,
                                 generation_config={"temperature": 0.1}
                             )
                             st.markdown(response.text)
+                            # Sauvegarde de la réponse de l'IA
                             st.session_state.chat_history.append({"role": "assistant", "content": response.text})
                         except Exception as e:
                             st.error(f"🔴 Erreur de l'API Google : {e}")
