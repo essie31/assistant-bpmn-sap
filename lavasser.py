@@ -301,4 +301,51 @@ if check_password():
                                 st.error(f"Erreur d'affichage du tableau : {e}")
 
                             fig = draw_radar_chart(json_data)
-                            if
+                            if fig:
+                                st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.warning("Le graphique radar n'a pas pu être généré. Le format JSON n'a pas été trouvé.")
+
+    with tab2:
+        st.header("Discutez avec votre Consultant SAP B1")
+        
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        if user_prompt := st.chat_input("Posez votre question sur SAP B1..."):
+            if not st.session_state.bpmn_context:
+                st.warning("Veuillez d'abord lancer l'étape 1 dans l'onglet 'Évaluation & Radar'.")
+            else:
+                with st.chat_message("user"):
+                    st.markdown(user_prompt)
+                st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+
+                # --- LE BOUCLIER ANTI-HALLUCINATION EST DE RETOUR ICI ---
+                chat_context = f"""
+                Tu es un consultant expert SAP Business One 10.0. L'utilisateur te pose une question sur son processus métier.
+                
+                RÈGLE N°1 : Tes réponses doivent s'appliquer STRICTEMENT ET UNIQUEMENT à SAP Business One 10.0. Ne donne jamais de chemins de menus provenant de SAP S/4HANA ou SAP ECC.
+                RÈGLE N°2 : Si tu n'es pas absolument certain du chemin exact du menu dans SAP B1, ou si la fonctionnalité n'existe pas en standard, TU DOIS dire 'Je ne suis pas certain' ou 'Cette fonction n'existe pas en standard'. N'invente JAMAIS de menus ou de cases à cocher imaginaires.
+                
+                Voici les données de son processus actuel :
+                {st.session_state.bpmn_context}
+                
+                Réponds de manière technique et directement applicable dans SAP B1 10.0.
+                Question : {user_prompt}
+                """
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Réflexion..."):
+                        try:
+                            model_name = get_best_model()
+                            model = genai.GenerativeModel(model_name)
+                            # TEMPÉRATURE À 0.1 POUR UN CHAT RIGOUREUX SANS HALLUCINATIONS
+                            response = model.generate_content(
+                                chat_context,
+                                generation_config=genai.types.GenerationConfig(temperature=0.1)
+                            )
+                            st.markdown(response.text)
+                            st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                        except Exception as e:
+                            st.error(f"🔴 Erreur de l'API Google : {e}")
