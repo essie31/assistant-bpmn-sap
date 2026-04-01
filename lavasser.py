@@ -38,7 +38,6 @@ st.markdown("""
 CODE_SECRET = st.secrets["APP_PASSWORD"]
 
 def check_password():
-    """Retourne True si l'utilisateur a entré le bon code."""
     def password_entered():
         if st.session_state["password"] == CODE_SECRET:
             st.session_state["password_correct"] = True
@@ -67,7 +66,6 @@ if check_password():
     API_KEY = st.secrets["API_KEY"]
 
     def parse_bpmn_from_file(file_object):
-        """Extrait les éléments et les flux localement."""
         try:
             tree = ET.parse(file_object)
             root = tree.getroot()
@@ -108,12 +106,23 @@ if check_password():
                 
         return "\n".join(tasks_list), "\n".join(flows)
 
-    def generate_full_analysis(tasks_text, flows_text):
-        """Génère le rapport ET les scores JSON pour les 9 piliers."""
+    # RETOUR DE VOTRE FONCTION QUI ÉVITE L'ERREUR 404
+    def get_best_model():
         genai.configure(api_key=API_KEY)
-        
-        # UTILISATION DU NOM OFFICIEL ACTUEL POUR ÉVITER L'ERREUR 404
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        valid_model_name = 'gemini-pro' 
+        try:
+            for m in genai.list_models():
+                if 'generateContent' in m.supported_generation_methods:
+                    if 'flash' in m.name: return m.name
+                    elif 'pro' in m.name: valid_model_name = m.name
+        except:
+            pass
+        return valid_model_name
+
+    def generate_full_analysis(tasks_text, flows_text):
+        genai.configure(api_key=API_KEY)
+        model_name = get_best_model()
+        model = genai.GenerativeModel(model_name)
         
         prompt = f"""
         Tu es un assistant expert combinant trois rôles : Analyste BPMN, Expert Industrie 4.0, et Consultant SAP B1 10.0.
@@ -144,9 +153,9 @@ if check_password():
         ### 4. 🏭 Évaluation des Tâches selon les 9 Piliers (Industrie 4.0)
         Génère 9 petits tableaux Markdown, un pour chaque pilier de l'Industrie 4.0 : 
         (1. Big Data/Analytics, 2. Robots Autonomes, 3. Simulation, 4. Intégration Systèmes, 5. IIoT, 6. Cybersécurité, 7. Cloud, 8. Fabrication Additive, 9. Réalité Augmentée).
-        ATTENTION EXTRÊME : Pour CHACUN des 9 tableaux, tu dois IMPÉRATIVEMENT évaluer TOUTES les tâches listées au début du prompt. Interdiction de résumer ou de regrouper.
+        ATTENTION EXTRÊME : Pour CHACUN des 9 tableaux, tu dois IMPÉRATIVEMENT évaluer TOUTES les tâches listées au début du prompt. Interdiction de résumer.
         Colonnes du tableau : `Tâche BPMN` | `Score (1-5)` | `Justification`.
-        ASTUCE: Rédige des justifications très courtes (3-4 mots) pour économiser l'espace.
+        ASTUCE: Rédige des justifications ultra-courtes (3-4 mots) pour économiser la mémoire.
 
         ### 5. SCORES_JSON
         À la toute fin, inclut un bloc JSON valide avec la note globale de 1 à 5 du processus entier pour les 9 piliers. Il ne doit y avoir aucun texte après ce bloc.
@@ -164,8 +173,6 @@ if check_password():
         }}
         ```
         """
-        
-        # ON LUI OUVRE LA MÉMOIRE AU MAXIMUM POUR QU'IL PUISSE FINIR LES 9 TABLEAUX
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(
@@ -176,7 +183,6 @@ if check_password():
         return response.text
 
     def draw_radar_chart(json_str):
-        """Convertit le JSON en graphique Radar pour les 9 piliers."""
         try:
             scores = json.loads(json_str)
             df = pd.DataFrame(dict(
@@ -191,7 +197,6 @@ if check_password():
         except Exception as e:
             return None
 
-    # --- INITIALISATION DE LA MÉMOIRE DU CHAT ---
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
     if "bpmn_context" not in st.session_state:
@@ -221,7 +226,7 @@ if check_password():
                             json_match = re.search(r'```json\n(.*?)\n```', report, re.DOTALL)
                             clean_report = re.sub(r'### 5\. SCORES_JSON.*', '', report, flags=re.DOTALL)
                             
-                            st.success("Analyse générée ! Vous pouvez imprimer cette page (Ctrl+P) ou (Cmd+P sur Mac).")
+                            st.success("Analyse générée ! Vous pouvez imprimer cette page (Ctrl+P).")
                             
                             col_text, col_radar = st.columns([2, 1])
                             
@@ -231,9 +236,7 @@ if check_password():
                             with col_radar:
                                 if json_match:
                                     json_data = json_match.group(1)
-                                    
                                     st.subheader("📊 Scores Globaux (9 Piliers)")
-                                    
                                     try:
                                         scores_dict = json.loads(json_data)
                                         df_scores = pd.DataFrame(list(scores_dict.items()), columns=['Pilier 4.0', 'Note globale'])
@@ -248,7 +251,7 @@ if check_password():
                                     st.warning("Le graphique radar n'a pas pu être généré (Rapport coupé avant la fin).")
                                     
                         except Exception as e:
-                            st.error(f"🔴 Une erreur de connexion à l'IA s'est produite : {e}")
+                            st.error(f"🔴 Erreur de l'API Google : {e}")
 
     with tab2:
         st.header("Discutez avec votre Consultant SAP B1")
@@ -270,7 +273,7 @@ if check_password():
                 Voici les données de son processus actuel :
                 {st.session_state.bpmn_context}
                 
-                Réponds de manière technique et directement applicable dans SAP B1 10.0.
+                Réponds de manière technique et directement applicable dans SAP B1 10.0. Ne donne jamais de chemins de menus provenant de SAP S/4HANA ou SAP ECC.
                 Question : {user_prompt}
                 """
 
@@ -278,9 +281,13 @@ if check_password():
                     with st.spinner("Réflexion..."):
                         try:
                             genai.configure(api_key=API_KEY)
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            response = model.generate_content(chat_context)
+                            model_name = get_best_model()
+                            model = genai.GenerativeModel(model_name)
+                            response = model.generate_content(
+                                chat_context,
+                                generation_config=genai.types.GenerationConfig(temperature=0.1)
+                            )
                             st.markdown(response.text)
                             st.session_state.chat_history.append({"role": "assistant", "content": response.text})
                         except Exception as e:
-                            st.error(f"🔴 Une erreur de connexion à l'IA s'est produite : {e}")
+                            st.error(f"🔴 Erreur de l'API Google : {e}")
