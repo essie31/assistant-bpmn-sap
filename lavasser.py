@@ -1,6 +1,6 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-import google.generativeai as genai
+from groq import Groq
 import plotly.express as px
 import pandas as pd
 import json
@@ -59,10 +59,14 @@ def check_password():
 if check_password():
     
     # ==========================================
-    # 🔑 CLÉ API SÉCURISÉE
+    # 🔑 INITIALISATION DE GROQ API
     # ==========================================
-    API_KEY = st.secrets["API_KEY"]
-    genai.configure(api_key=API_KEY)
+    # Assurez-vous d'avoir ajouté GROQ_API_KEY dans vos secrets Streamlit
+    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
+    client = Groq(api_key=GROQ_API_KEY)
+    
+    # On utilise le modèle Llama 3 70B de Groq : extrêmement rapide et intelligent
+    MODEL_NAME = "llama3-70b-8192"
 
     # --- LISTE DES PILIERS ---
     PILIERS = {
@@ -105,25 +109,12 @@ if check_password():
                 
         return "\n".join(tasks_list)
 
-    def get_best_model():
-        valid_model_name = 'gemini-pro' 
-        try:
-            for m in genai.list_models():
-                if 'generateContent' in m.supported_generation_methods:
-                    if 'flash' in m.name: return m.name
-                    elif 'pro' in m.name: valid_model_name = m.name
-        except:
-            pass
-        return valid_model_name
-
     # ==========================================
-    # 🤖 FONCTIONS DE GÉNÉRATION SÉPARÉES
+    # 🤖 FONCTIONS DE GÉNÉRATION GROQ SÉPARÉES
     # ==========================================
 
     def generate_part1_analysis(tasks_text):
-        model = genai.GenerativeModel(get_best_model())
         prompt = f"""
-        Tu es un Consultant Expert SAP Business One 10.0 et un Analyste BPMN Senior.
         Voici les données du processus métier :
         TÂCHES : {tasks_text}
 
@@ -148,13 +139,18 @@ if check_password():
           * **Écran cible :** [Ex: Commande client]
           * **Proposition :** [Explication technique très précise]
         """
-        response = model.generate_content(prompt, generation_config={"temperature": 0.0})
-        return response.text
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "Tu es un Consultant Expert SAP Business One 10.0 et un Analyste BPMN Senior."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0
+        )
+        return response.choices[0].message.content
 
     def generate_single_pillar(tasks_text, pillar_name):
-        model = genai.GenerativeModel(get_best_model())
         prompt = f"""
-        Tu es un Expert Industrie 4.0.
         Génère un tableau d'évaluation UNIQUEMENT pour le pilier : {pillar_name}.
         
         RÈGLE ABSOLUE : Tu dois lister et évaluer TOUTES les tâches ci-dessous, sans exception.
@@ -164,11 +160,17 @@ if check_password():
         Colonnes du tableau Markdown : `Tâche BPMN` | `Score {pillar_name} (1-5)` | `Justification`.
         ASTUCE: Justification très courte (3 mots max).
         """
-        response = model.generate_content(prompt, generation_config={"temperature": 0.1})
-        return response.text
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "Tu es un Expert Industrie 4.0."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.1
+        )
+        return response.choices[0].message.content
 
     def generate_part3_radar(tasks_text):
-        model = genai.GenerativeModel(get_best_model())
         prompt = f"""
         Sur la base de ces tâches : {tasks_text}
         Calcule la note globale moyenne (1 à 5) du processus pour les 9 piliers de l'industrie 4.0.
@@ -177,8 +179,15 @@ if check_password():
         {{ "Big Data": 2, "Robots Autonomes": 1, "Simulation": 1, "Intégration Systèmes": 3, "IIoT": 2, "Cybersécurité": 4, "Cloud": 3, "Fabrication Additive": 1, "Réalité Augmentée": 1 }}
         ```
         """
-        response = model.generate_content(prompt, generation_config={"temperature": 0.1})
-        return response.text
+        response = client.chat.completions.create(
+            model=MODEL_NAME,
+            messages=[
+                {"role": "system", "content": "Tu es un calculateur strict qui ne renvoie que du JSON."},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.0
+        )
+        return response.choices[0].message.content
 
     def draw_radar_chart(json_str):
         try:
@@ -247,7 +256,7 @@ if check_password():
             # SECTION 2 : LES 9 PILIERS I4.0 
             # =========================================================
             st.subheader("Étape 2 : Évaluation des 9 Piliers (Industrie 4.0)")
-            st.write("Générez les tableaux un par un pour ne pas surcharger la mémoire de l'IA (Environ 15 sec par tableau).")
+            st.write("Générez les tableaux un par un. (Avec Groq, c'est presque instantané ⚡)")
             
             # Grille de 3 colonnes pour les 9 boutons
             cols = st.columns(3)
@@ -256,7 +265,7 @@ if check_password():
                 with col:
                     if not st.session_state.pillar_scores[num]:
                         if st.button(f"⚙️ Générer : {name}", key=f"btn_{num}", use_container_width=True):
-                            with st.spinner(f"Génération du tableau pour {name} (Patientez)..."):
+                            with st.spinner(f"Génération rapide pour {name}..."):
                                 try:
                                     st.session_state.pillar_scores[num] = generate_single_pillar(st.session_state.bpmn_tasks_only, name)
                                     st.rerun()
@@ -264,7 +273,7 @@ if check_password():
                     else:
                         st.success(f"✅ {name} généré")
 
-            # Affichage direct et visible des tableaux générés (SANS MENU DÉROULANT CACHÉ)
+            # Affichage direct et visible des tableaux générés
             for num, name in PILIERS.items():
                 if st.session_state.pillar_scores[num]:
                     st.markdown(f"### 📊 Score : {name}")
@@ -330,9 +339,16 @@ if check_password():
                 with st.chat_message("assistant"):
                     with st.spinner("Réflexion..."):
                         try:
-                            model = genai.GenerativeModel(get_best_model())
-                            response = model.generate_content(chat_context, generation_config={"temperature": 0.0})
-                            st.markdown(response.text)
-                            st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                            response = client.chat.completions.create(
+                                model=MODEL_NAME,
+                                messages=[
+                                    {"role": "system", "content": "Tu es un consultant SAP B1 10.0 hyper rigoureux."},
+                                    {"role": "user", "content": chat_context}
+                                ],
+                                temperature=0.0
+                            )
+                            ans = response.choices[0].message.content
+                            st.markdown(ans)
+                            st.session_state.chat_history.append({"role": "assistant", "content": ans})
                         except Exception as e:
-                            st.error(f"🔴 Erreur de l'API Google : {e}")
+                            st.error(f"🔴 Erreur API Groq : {e}")
