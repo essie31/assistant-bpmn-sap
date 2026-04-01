@@ -65,7 +65,7 @@ if check_password():
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=GROQ_API_KEY)
     
-    MODEL_NAME = "llama-3.3-70b-versatile"
+    MODEL_NAME = "llama-3.1-8b-instant"
 
     # --- LISTE DES PILIERS ---
     PILIERS = {
