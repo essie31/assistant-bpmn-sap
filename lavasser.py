@@ -1,37 +1,70 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-from groq import Groq
+from google import genai
+from google.genai import types 
 import plotly.express as px
 import pandas as pd
 import json
 import re
 
 # --- Configuration de la page ---
-st.set_page_config(page_title="Assistant BPMN & SAP B1", page_icon="🏭", layout="wide")
+st.set_page_config(page_title="Hub BPMN ➔ SAP (Analyse)", page_icon="📊", layout="wide")
+
+# ==========================================
+# 🖨️ CSS POUR IMPRESSION
+# ==========================================
+st.markdown("""
+<style>
+@media print {
+    body, html, .stApp, .main, section, div.block-container { height: auto !important; overflow: visible !important; display: block !important; position: relative !important; }
+    header, footer, [data-testid="stSidebar"], .stButton, .stFileUploader, .stTextInput { display: none !important; }
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    table { page-break-inside: auto; width: 100% !important; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # 🔒 SÉCURITÉ
 # ==========================================
-CODE_SECRET = st.secrets["APP_PASSWORD"]
+CODE_SECRET = st.secrets["APP_PASSWORD"] 
 
 def check_password():
+    def password_entered():
+        if st.session_state["password"] == CODE_SECRET:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  
+        else:
+            st.session_state["password_correct"] = False
     if "password_correct" not in st.session_state:
         st.title("🔒 Accès Restreint")
-        pwd = st.text_input("Veuillez entrer le code d'accès :", type="password")
-        if st.button("Valider"):
-            if pwd == CODE_SECRET:
-                st.session_state["password_correct"] = True
-                st.rerun()
-            else: st.error("Code incorrect.")
+        st.text_input("Code d'accès :", type="password", on_change=password_entered, key="password")
+        return False
+    elif not st.session_state["password_correct"]:
+        st.title("🔒 Accès Restreint")
+        st.text_input("Code d'accès :", type="password", on_change=password_entered, key="password")
+        st.error("😕 Code d'accès incorrect.")
         return False
     return True
 
 if check_password():
     
-    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-    client = Groq(api_key=GROQ_API_KEY)
-    # Utilisation du modèle le plus puissant pour éviter les erreurs techniques
-    MODEL_NAME = "llama-3.3-70b-versatile"
+    # --- LIEN VERS L'APP 2 DANS LA SIDEBAR ---
+    with st.sidebar:
+        st.title("🚀 Navigation")
+        st.info("Besoin d'aide pour la configuration ?")
+        # Remplacez par votre vrai lien une fois l'App 2 déployée
+        st.link_button("💬 Aller à l'Assistant Chat SAP", "https://votre-deuxieme-app.streamlit.app")
+        st.divider()
+        st.write("Modèle : Gemini 2.5 Flash")
+
+    # ==========================================
+    # 🔑 CONFIGURATION GOOGLE
+    # ==========================================
+    API_KEY = st.secrets["API_KEY"] 
+    client = genai.Client(api_key=API_KEY)
+    MODEL_NAME = 'gemini-2.5-flash'
 
     def parse_bpmn_from_file(file_object):
         try:
@@ -41,89 +74,86 @@ if check_password():
             lane_map = {node_ref.text: lane.get('name', 'Général') 
                         for lane in root.findall('.//bpmn:lane', ns) 
                         for node_ref in lane.findall('bpmn:flowNodeRef', ns)}
-            tasks = [f"- [{lane_map.get(elem.get('id'), 'Général')}] {elem.get('name', 'Sans nom').strip()}"
-                     for elem in root.findall('.//bpmn:process/*', ns)
-                     if 'id' in elem.attrib and 'sequenceFlow' not in elem.tag and elem.get('name')]
-            return "\n".join(tasks)
-        except: return None
+            
+            tasks = []
+            flows = []
+            elements = {}
 
-    # ==========================================
-    # 🤖 GÉNÉRATION ÉTAPE 1 : ARCHITECTURE SAP RÉELLE
-    # ==========================================
+            for elem in root.findall('.//bpmn:process/*', ns):
+                if 'id' in elem.attrib and 'sequenceFlow' not in elem.tag:
+                    e_id, e_name = elem.get('id'), elem.get('name', 'Sans nom').strip()
+                    e_type = elem.tag.split('}')[-1]
+                    lane = lane_map.get(e_id, 'Général')
+                    elements[e_id] = {'name': e_name, 'lane': lane}
+                    if e_name != 'Sans nom':
+                        tasks.append(f"- [{lane}] {e_name} ({e_type})")
 
-    def generate_step1(tasks_text):
+            for flow in root.findall('.//bpmn:sequenceFlow', ns):
+                src, tgt = flow.get('sourceRef'), flow.get('targetRef')
+                if src in elements and tgt in elements:
+                    flows.append(f"De '{elements[src]['name']}' vers '{elements[tgt]['name']}'")
+
+            return "\n".join(tasks), "\n".join(flows)
+        except: return None, None
+
+    def generate_full_analysis(tasks_text, flows_text):
         prompt = f"""
-        Tu es un Consultant Expert Senior SAP Business One 10.0. 
-        Analyse ce processus : {tasks_text}
-
-        RÈGLES TECHNIQUES STRICTES POUR L'INTÉGRATION :
-        1. OF UNIQUE : Un processus de fabrication (lavage, ozone, etc.) utilise UN SEUL Ordre de Fabrication (OWOR).
-        2. ÉTAPES : Les traitements (1er lavage, permanganate) sont des 'Étapes de Route' ou 'Lignes de Ressources' dans l'OF.
-        3. TRANSACTIONS : Pour valider une étape, utilise la 'Déclaration de production' (Table OIGN).
-        4. STOCK : L'impact sur OITW se fait via la consommation des composants (IGE) ou l'entrée du produit fini (IGN).
-        5. EXPORT : Le transfert vers l'export est une 'Livraison' (ODLN), pas une commande.
-        6. QUALITÉ : Le standard SAP B1 n'utilise pas 'OINS'. Utilise des 'Champs Utilisateurs (UDF)' ou 'Plans de contrôle'.
-
-        Produis un rapport détaillé :
-        ### 1. 📊 Synthèse des Tâches
-        ### 2. 📝 Analyse Métier du Flux (Minimum 3 paragraphes)
-        ### 3. 🔵 Architecture SAP Business One 10.0 (Détails techniques corrigés)
-        Pour chaque tâche informatisable :
-        * **[Nom de la tâche]**
-          * **Objet SAP :** [Ex: Étape de route dans OWOR / Déclaration de production OIGN]
-          * **Chemin Menu :** [Chemin exact du standard 10.0]
-          * **Impact Système :** [Impact réel sur les stocks et les coûts de production]
-        """
-        return client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "system", "content": "Tu es un architecte SAP B1 10.0. Tu ne cites que des menus et objets réels."},
-                      {"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=3000
-        ).choices[0].message.content
-
-    # ==========================================
-    # 🤖 GÉNÉRATION ÉTAPE 2 : MATRICE 4.0
-    # ==========================================
-
-    def generate_step2(tasks_text):
-        prompt = f"""
-        Génère un seul grand tableau Markdown Industrie 4.0 pour ces tâches : {tasks_text}
-        Colonnes : | Tâche | Big Data | Robots | Simul. | Intégr. | IIoT | Cyber | Cloud | Additif | RA | Justification Technique |
-        Chaque justification doit faire au moins 15 mots et être technique.
-        """
-        return client.chat.completions.create(
-            model=MODEL_NAME,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0.1,
-            max_tokens=4000
-        ).choices[0].message.content
-
-    # --- UI Streamlit ---
-    if "s1" not in st.session_state: st.session_state.update({"s1":"", "s2":"", "tasks":""})
-    
-    file = st.file_uploader("Charger le fichier BPMN", type=['bpmn', 'xml'])
-    if file:
-        st.session_state.tasks = parse_bpmn_from_file(file)
+        Tu es un Architecte SAP Senior et Expert Industrie 4.0. Analyse ce processus :
         
-        col1, col2, col3 = st.columns(3)
-        with col1:
-            if st.button("1️⃣ Analyse & Architecture SAP"):
-                st.session_state.s1 = generate_step1(st.session_state.tasks)
-        with col2:
-            if st.button("2️⃣ Matrice Industrie 4.0"):
-                st.session_state.s2 = generate_step2(st.session_state.tasks)
-        with col3:
-            if st.button("3️⃣ Graphique Radar"):
-                res = client.chat.completions.create(
-                    model=MODEL_NAME,
-                    messages=[{"role":"user", "content":f"JSON uniquement : moyennes 1-5 des 9 piliers I4.0 pour : {st.session_state.tasks}"}],
-                    temperature=0
-                ).choices[0].message.content
-                try:
-                    data = json.loads(re.search(r'\{.*\}', res, re.S).group())
-                    st.plotly_chart(px.line_polar(pd.DataFrame(dict(r=list(data.values()), theta=list(data.keys()))), r='r', theta='theta', line_close=True, range_r=[0,5]))
-                except: st.error("Erreur graphique")
+        TÂCHES : {tasks_text}
+        FLUX : {flows_text}
 
-        if st.session_state.s1: st.markdown(st.session_state.s1)
-        if st.session_state.s2: st.markdown(st.session_state.s2)
+        Génère un rapport de haute qualité avec :
+
+        ### 1. 📊 Architecture & Intégration SAP B1 10.0 (Ultra-Détaillé)
+        Pour chaque tâche informatisable, fournis :
+        * **Tâche :** [Nom]
+        * **Module & Objet SAP :** [Ex: Production - OWOR]
+        * **Action Technique :** [Description précise des champs et de l'impact transactionnel (OIGN/OIGE)]
+        * **Impact Stock/Compta :** [Impact sur les tables OITW et OJDT]
+
+        ### 2. 🏭 Matrice de Maturité Industrie 4.0
+        Génère UN SEUL grand tableau Markdown évaluant TOUTES les tâches sur les 9 piliers.
+        Colonnes : Tâche | Big Data | Robots | Simul | Intégr | IIoT | Cyber | Cloud | Additif | RA | Justification.
+
+        ### 3. SCORES_JSON
+        Moyenne globale 1-5 pour le radar.
+        ```json
+        {{ "Big Data": 0, "Robots Autonomes": 0, "Simulation": 0, "Intégration Systèmes": 0, "IIoT": 0, "Cybersécurité": 0, "Cloud": 0, "Fabrication Additive": 0, "Réalité Augmentée": 0 }}
+        ```
+        """
+        response = client.models.generate_content(
+            model=MODEL_NAME, contents=prompt,
+            config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=8192)
+        )
+        return response.text
+
+    # ==========================================
+    # 🏁 UI PRINCIPALE
+    # ==========================================
+    st.title("🏭 Hub d'Architecture : BPMN ➔ SAP B1")
+    uploaded_file = st.file_uploader("Importez votre BPMN (.bpmn, .xml)", type=['bpmn', 'xml'])
+
+    if uploaded_file:
+        if st.button("🚀 Lancer l'Analyse Métier & 4.0", type="primary"):
+            with st.spinner("Analyse approfondie en cours..."):
+                t_txt, f_txt = parse_bpmn_from_file(uploaded_file)
+                report = generate_full_analysis(t_txt, f_txt)
+                
+                # Extraction Radar
+                json_match = re.search(r'```json\n(.*?)\n```', report, re.DOTALL)
+                clean_report = re.sub(r'### 3\. SCORES_JSON.*', '', report, flags=re.DOTALL)
+                
+                col_text, col_radar = st.columns([2, 1])
+                with col_text:
+                    st.markdown(clean_report)
+                
+                with col_radar:
+                    if json_match:
+                        st.subheader("📈 Radar de Maturité")
+                        scores = json.loads(json_match.group(1))
+                        df = pd.DataFrame(dict(r=list(scores.values()), theta=list(scores.keys())))
+                        fig = px.line_polar(df, r='r', theta='theta', line_close=True, range_r=[0,5])
+                        fig.update_traces(fill='toself', line_color='#ff7f0e')
+                        st.plotly_chart(fig, use_container_width=True)
+                        st.dataframe(pd.DataFrame(list(scores.items()), columns=['Pilier', 'Note']), hide_index=True)
