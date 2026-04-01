@@ -56,7 +56,7 @@ if check_password():
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=GROQ_API_KEY)
     
-    # ✅ LE MODÈLE ACTIF, RAPIDE ET AVEC UN ÉNORME QUOTA GRATUIT
+    # Modèle très rapide avec un quota gratuit raisonnable
     MODEL_NAME = "llama-3.1-8b-instant"
 
     PILIERS = {
@@ -121,19 +121,19 @@ if check_password():
         Dresse un tableau Markdown propre (Colonnes : Département | Nom de la Tâche).
 
         ### 2. 📝 Description Logique du Processus
-        Rédige au moins 3 paragraphes complets décrivant le flux de bout en bout, les conditions métier et les transitions entre les départements. Ne fais pas de résumé expéditif.
+        Rédige au moins 3 paragraphes complets décrivant le flux de bout en bout.
 
         ### 3. 🔵 Architecture & Intégration SAP Business One 10.0
         RÈGLES ABSOLUES :
-        1. UNIQUEMENT le standard SAP B1 10.0 (Pas de S/4HANA, Pas d'ECC).
-        2. Ignore les tâches 100% physiques (ex: couper, laver). 
-        3. Si la fonction n'existe pas, écris clairement : "⚠️ Nécessite un Champ Utilisateur (UDF)".
+        1. UNIQUEMENT le standard SAP B1 10.0. Pas de S/4HANA.
+        2. Ignore les tâches 100% physiques. 
+        3. Si la fonction n'existe pas, écris : "⚠️ Nécessite un Champ Utilisateur (UDF)".
 
         Pour chaque tâche informatisable, sois très bavard et technique :
         * **[Nom de la tâche]**
-          * **Chemin SAP exact :** [Ex: Menu Principal > Ventes > Commande Client]
-          * **Écran cible & Données :** [Quels écrans et quelles données de base utiliser]
-          * **Action système détaillée :** [Explique précisément les champs à remplir et l'impact de l'enregistrement (ex: écriture comptable, mouvement de stock).]
+          * **Chemin SAP exact :** [Ex: Ventes > Commande Client]
+          * **Écran cible & Données :** [Quels écrans utiliser]
+          * **Action système détaillée :** [Champs à remplir et impact système]
         """
         response = client.chat.completions.create(
             model=MODEL_NAME,
@@ -141,7 +141,8 @@ if check_password():
                 {"role": "system", "content": "Tu es un Architecte Senior SAP Business One 10.0 hyper détaillé."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.2
+            temperature=0.2,
+            max_tokens=2500 # LIMITE FIXÉE POUR ÉVITER L'ERREUR 413
         )
         return response.choices[0].message.content
 
@@ -157,31 +158,32 @@ if check_password():
             
             RÈGLES IMPÉRATIVES :
             1. Tu DOIS lister et évaluer ABSOLUMENT TOUTES les tâches fournies.
-            2. Tu DOIS utiliser EXACTEMENT ces 3 colonnes, sans changer leurs noms :
-            | Tâche BPMN | Score (1-5) | Justification |
+            2. Tu DOIS utiliser EXACTEMENT ces 3 colonnes :
+            | Tâche BPMN | Score (1-5) | Justification détaillée |
             |---|---|---|
-            | [Nom] | [Note] | [Rédige une vraie phrase complète et détaillée expliquant la note] |
+            | [Nom] | [Note] | [Rédige une phrase complète expliquant la note] |
 
             TÂCHES À ÉVALUER :
             {tasks_text}
 
-            Renvoie UNIQUEMENT le code Markdown du tableau. Ne dis pas "Voici le tableau".
+            Renvoie UNIQUEMENT le code Markdown du tableau. Ne dis rien d'autre.
             """
             
             response = client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=[
-                    {"role": "system", "content": "Tu es un Expert Industrie 4.0. Tu respectes rigoureusement le format Markdown et tu fais de longues justifications."},
+                    {"role": "system", "content": "Tu es un Expert Industrie 4.0. Format Markdown strict."},
                     {"role": "user", "content": prompt}
                 ],
-                temperature=0.1
+                temperature=0.1,
+                max_tokens=1000 # LIMITE FIXÉE : Empêche Groq de réserver 6000 tokens par tableau !
             )
             
             full_markdown += f"### 📊 Pilier : {pillar_name}\n\n"
             full_markdown += response.choices[0].message.content.strip() + "\n\n---\n\n"
             
-            # Pause de 2 secondes pour éviter l'erreur 429 de Rate Limit
-            time.sleep(2)
+            # Temps de pause étendu pour respirer et rester sous les limites TPM
+            time.sleep(6)
             
         my_bar.progress(1.0, text="✅ Les 9 tableaux sont générés !")
         time.sleep(1)
@@ -194,7 +196,7 @@ if check_password():
         Sur la base de ces tâches : {tasks_text}
         Calcule la note moyenne (1 à 5) du processus entier pour les 9 piliers de l'industrie 4.0.
         
-        Tu DOIS renvoyer UNIQUEMENT un objet JSON pur. AUCUN texte, AUCUNE balise markdown autour.
+        Tu DOIS renvoyer UNIQUEMENT un objet JSON pur. AUCUN texte autour.
         Exemple :
         {{
           "Big Data & Analytics": 2,
@@ -214,7 +216,8 @@ if check_password():
                 {"role": "system", "content": "Tu ne renvoies strictement que du texte JSON, sans guillemets markdown."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.0
+            temperature=0.0,
+            max_tokens=300 # LIMITE FIXÉE POUR LE JSON
         )
         return response.choices[0].message.content
 
@@ -249,7 +252,7 @@ if check_password():
     tab1, tab2 = st.tabs(["📊 Évaluation en 3 Étapes", "💬 Assistant SAP"])
 
     with tab1:
-        st.write("Importez votre processus. Propulsé par Groq **Llama 3.1 8B** ⚡.")
+        st.write("Importez votre processus.")
         uploaded_file = st.file_uploader("Fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
@@ -273,12 +276,12 @@ if check_password():
 
             with col_b1:
                 if not st.session_state.step1_text:
-                    if st.button("1️⃣ Analyse Métier & SAP Détaillée", use_container_width=True, type="primary"):
+                    if st.button("1️⃣ Analyse Métier & SAP", use_container_width=True, type="primary"):
                         with st.spinner("Rédaction du rapport SAP détaillé..."):
                             try:
                                 st.session_state.step1_text = generate_part1_analysis(st.session_state.bpmn_tasks_only, st.session_state.bpmn_flows_only)
                                 st.rerun()
-                            except Exception as e: st.error(f"Erreur : {e}")
+                            except Exception as e: st.error(f"Erreur Groq : {e}")
                 else: st.success("✅ Étape 1 : Terminée")
 
             with col_b2:
@@ -287,7 +290,7 @@ if check_password():
                         try:
                             st.session_state.step2_text = generate_part2_evaluation(st.session_state.bpmn_tasks_only)
                             st.rerun()
-                        except Exception as e: st.error(f"Erreur de l'API Groq : {e}")
+                        except Exception as e: st.error(f"Erreur Groq : {e}")
                 else: st.success("✅ Étape 2 : Terminée")
 
             with col_b3:
@@ -297,7 +300,7 @@ if check_password():
                             try:
                                 st.session_state.step3_text = generate_part3_radar(st.session_state.bpmn_tasks_only)
                                 st.rerun()
-                            except Exception as e: st.error(f"Erreur : {e}")
+                            except Exception as e: st.error(f"Erreur Groq : {e}")
                 else: st.success("✅ Étape 3 : Terminée")
 
             st.divider()
@@ -366,10 +369,11 @@ if check_password():
                                     {"role": "system", "content": "Tu es rigoureux, tu ne mens jamais sur les capacités de SAP B1."},
                                     {"role": "user", "content": chat_context}
                                 ],
-                                temperature=0.0
+                                temperature=0.0,
+                                max_tokens=1000
                             )
                             ans = response.choices[0].message.content
                             st.markdown(ans)
                             st.session_state.chat_history.append({"role": "assistant", "content": ans})
                         except Exception as e:
-                            st.error(f"🔴 Erreur API : {e}")
+                            st.error(f"🔴 Erreur API Groq : {e}")
