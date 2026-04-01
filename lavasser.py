@@ -66,7 +66,7 @@ if check_password():
     client = Groq(api_key=GROQ_API_KEY)
     
     # On utilise le modèle Llama 3 70B de Groq : extrêmement rapide et intelligent
-    MODEL_NAME = "llama3-70b-8192"
+    MODEL_NAME = "llama-3.3-70b-versatile"
 
     # --- LISTE DES PILIERS ---
     PILIERS = {
