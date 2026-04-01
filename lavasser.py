@@ -55,10 +55,12 @@ if check_password():
     # ==========================================
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=GROQ_API_KEY)
-    MODEL_NAME = "llama-3.1-8b-instant"
+    
+    # On utilise Mixtral : très intelligent pour le code/markdown, et offre 500 000 tokens/jour gratuits !
+    MODEL_NAME = "mixtral-8x7b-32768"
 
     PILIERS = {
-        1: "Big Data / Analytics", 2: "Robots Autonomes", 3: "Simulation",
+        1: "Big Data & Analytics", 2: "Robots Autonomes", 3: "Simulation",
         4: "Intégration Systèmes", 5: "IIoT", 6: "Cybersécurité",
         7: "Cloud Computing", 8: "Fabrication Additive", 9: "Réalité Augmentée"
     }
@@ -87,7 +89,6 @@ if check_password():
                 lane_name = lane_map.get(elem_id, 'Général')
                 elements[elem_id] = {'name': elem_name, 'type': elem_type, 'lane': lane_name}
                 if elem_name != 'Sans nom':
-                    # Simplification du nom pour éviter les redondances dans les tableaux
                     tasks_list.append(f"- [{lane_name}] {elem_name}")
         
         flows = []
@@ -114,33 +115,33 @@ if check_password():
         TÂCHES : {tasks_text}
         FLUX : {flows_text}
 
-        Génère une analyse EXHAUSTIVE, TRÈS DÉTAILLÉE et 100% FACTUELLE (Zéro hallucination).
+        Génère un rapport EXTRÊMEMENT DÉTAILLÉ, LONG et PROFESSIONNEL. Zéro hallucination.
 
         ### 1. 📊 Tableau Synthétique des Tâches
-        Dresse un tableau Markdown propre (Colonnes : Département/Rôle | Nom de la Tâche).
+        Dresse un tableau Markdown propre (Colonnes : Département | Nom de la Tâche).
 
         ### 2. 📝 Description Logique du Processus
-        Rédige une description TRÈS LONGUE et DÉTAILLÉE de l'enchaînement des étapes. Explique la logique métier, les conditions et la valeur ajoutée du flux. Ne sois pas concis, explique en profondeur.
+        Rédige au moins 3 paragraphes complets décrivant le flux de bout en bout, les conditions métier et les transitions entre les départements. Ne fais pas de résumé expéditif.
 
         ### 3. 🔵 Architecture & Intégration SAP Business One 10.0
         RÈGLES ABSOLUES :
         1. UNIQUEMENT le standard SAP B1 10.0 (Pas de S/4HANA, Pas d'ECC).
-        2. Ignore les tâches manuelles/physiques (ex: découper, déplacer, laver). Ne propose SAP que pour la gestion de données, flux physiques, compta, ou prod.
-        3. Si la fonction n'existe pas en standard, écris : "⚠️ Nécessite un Champ Utilisateur (UDF) ou un Add-on".
+        2. Ignore les tâches 100% physiques (ex: couper, laver). 
+        3. Si la fonction n'existe pas, écris clairement : "⚠️ Nécessite un Champ Utilisateur (UDF)".
 
-        Pour chaque tâche informatisable, fournis une documentation technique détaillée :
+        Pour chaque tâche informatisable, sois très bavard et technique :
         * **[Nom de la tâche]**
-          * **Chemin SAP exact :** [Ex: Menu Principal > Ventes - Client > Commande Client]
-          * **Écran & Données de base :** [Quels écrans utiliser, quelles fiches partenaires/articles doivent être configurées en amont]
-          * **Action système détaillée :** [Explique précisément les champs standards à renseigner, et l'impact de la validation du document (ex: création d'écriture comptable, mouvement de stock, engagement métier).]
+          * **Chemin SAP exact :** [Ex: Menu Principal > Ventes > Commande Client]
+          * **Écran cible & Données :** [Quels écrans et quelles données de base utiliser]
+          * **Action système détaillée :** [Explique précisément les champs à remplir et l'impact de l'enregistrement (ex: écriture comptable, mouvement de stock).]
         """
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "Tu es un Architecte Senior SAP Business One 10.0 hyper rigoureux et détaillé."},
+                {"role": "system", "content": "Tu es un Architecte Senior SAP Business One 10.0 hyper détaillé."},
                 {"role": "user", "content": prompt}
             ],
-            temperature=0.1 # Légèrement augmenté pour permettre des descriptions plus longues
+            temperature=0.2
         )
         return response.choices[0].message.content
 
@@ -154,29 +155,33 @@ if check_password():
             prompt = f"""
             Génère un tableau Markdown d'évaluation UNIQUEMENT pour le pilier : **{pillar_name}**.
             
-            RÈGLE 1 : Évalue TOUTES les tâches ci-dessous. N'en oublie aucune.
-            RÈGLE 2 : Formate STRICTEMENT le tableau comme ceci :
-            | Tâche | Score (1-5) | Justification détaillée |
+            RÈGLES IMPÉRATIVES :
+            1. Tu DOIS lister et évaluer ABSOLUMENT TOUTES les tâches fournies.
+            2. Tu DOIS utiliser EXACTEMENT ces 3 colonnes, sans changer leurs noms :
+            | Tâche BPMN | Score (1-5) | Justification |
             |---|---|---|
-            | [Nom de la tâche] | [Note] | [1 à 2 phrases expliquant concrètement le pourquoi de la note] |
+            | [Nom] | [Note] | [Rédige une vraie phrase complète et détaillée expliquant la note] |
 
-            TÂCHES :
+            TÂCHES À ÉVALUER :
             {tasks_text}
 
-            Renvoie UNIQUEMENT le tableau Markdown. Aucun texte avant ou après.
+            Renvoie UNIQUEMENT le code Markdown du tableau. Ne dis pas "Voici le tableau".
             """
             
             response = client.chat.completions.create(
                 model=MODEL_NAME,
                 messages=[
-                    {"role": "system", "content": "Tu es un Expert Industrie 4.0. Tu fournis des justifications détaillées et tu respectes strictement le format Markdown."},
+                    {"role": "system", "content": "Tu es un Expert Industrie 4.0. Tu respectes rigoureusement le format Markdown et tu fais de longues justifications."},
                     {"role": "user", "content": prompt}
                 ],
                 temperature=0.1
             )
             
             full_markdown += f"### 📊 Pilier : {pillar_name}\n\n"
-            full_markdown += response.choices[0].message.content + "\n\n---\n\n"
+            full_markdown += response.choices[0].message.content.strip() + "\n\n---\n\n"
+            
+            # Pause de 2 secondes pour éviter l'erreur 429 de Rate Limit sur l'API Groq (30 requêtes par minute)
+            time.sleep(2)
             
         my_bar.progress(1.0, text="✅ Les 9 tableaux sont générés !")
         time.sleep(1)
@@ -187,12 +192,12 @@ if check_password():
     def generate_part3_radar(tasks_text):
         prompt = f"""
         Sur la base de ces tâches : {tasks_text}
-        Calcule la note moyenne (1 à 5) du processus entier pour chacun des 9 piliers de l'industrie 4.0.
+        Calcule la note moyenne (1 à 5) du processus entier pour les 9 piliers de l'industrie 4.0.
         
-        Tu DOIS renvoyer UNIQUEMENT un objet JSON pur. AUCUN texte avant, AUCUN texte après.
-        Exemple exact attendu :
+        Tu DOIS renvoyer UNIQUEMENT un objet JSON pur. AUCUN texte, AUCUNE balise markdown autour.
+        Exemple :
         {{
-          "Big Data / Analytics": 2,
+          "Big Data & Analytics": 2,
           "Robots Autonomes": 1,
           "Simulation": 1,
           "Intégration Systèmes": 3,
@@ -206,7 +211,7 @@ if check_password():
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "Tu es un bot qui ne parle qu'en format JSON pur."},
+                {"role": "system", "content": "Tu ne renvoies strictement que du texte JSON, sans guillemets markdown."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.0
@@ -215,7 +220,6 @@ if check_password():
 
     def draw_radar_chart(json_str):
         try:
-            # Extraction robuste du JSON (ignore le markdown autour)
             json_match = re.search(r'\{[\s\S]*\}', json_str)
             if not json_match:
                 return None
@@ -245,7 +249,7 @@ if check_password():
     tab1, tab2 = st.tabs(["📊 Évaluation en 3 Étapes", "💬 Assistant SAP"])
 
     with tab1:
-        st.write("Importez votre processus. Propulsé par Groq ⚡.")
+        st.write("Importez votre processus. Propulsé par Groq **Mixtral 8x7B** ⚡.")
         uploaded_file = st.file_uploader("Fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
@@ -283,7 +287,7 @@ if check_password():
                         try:
                             st.session_state.step2_text = generate_part2_evaluation(st.session_state.bpmn_tasks_only)
                             st.rerun()
-                        except Exception as e: st.error(f"Erreur : {e}")
+                        except Exception as e: st.error(f"Erreur de l'API Groq : {e}")
                 else: st.success("✅ Étape 2 : Terminée")
 
             with col_b3:
@@ -312,7 +316,6 @@ if check_password():
                 st.subheader("📊 Résultats Globaux")
                 report_part3 = st.session_state.step3_text
                 
-                # Extraction ultra robuste du JSON
                 json_match = re.search(r'\{[\s\S]*\}', report_part3)
                 if json_match:
                     json_data = json_match.group(0)
@@ -329,10 +332,10 @@ if check_password():
                         if fig: st.plotly_chart(fig, use_container_width=True)
                 else:
                     st.warning("Erreur : Impossible d'extraire les données du Radar.")
-                    st.code(report_part3) # Affiche ce que l'IA a répondu pour qu'on comprenne le bug
+                    st.code(report_part3)
 
     # ==========================================
-    # 💬 ONGLET 2 : CHAT
+    # 💬 ONGLET 2 : CHAT SAP
     # ==========================================
     with tab2:
         st.header("Discutez avec votre Consultant SAP B1")
@@ -340,7 +343,7 @@ if check_password():
             with st.chat_message(message["role"]):
                 st.markdown(message["content"])
 
-        if user_prompt := st.chat_input("Posez votre question..."):
+        if user_prompt := st.chat_input("Posez votre question SAP B1..."):
             if not st.session_state.bpmn_tasks_only:
                 st.warning("Importez d'abord un fichier.")
             else:
@@ -348,7 +351,7 @@ if check_password():
                 st.session_state.chat_history.append({"role": "user", "content": user_prompt})
 
                 chat_context = f"""
-                Tu es un consultant SAP Business One 10.0. 
+                Tu es un consultant expert SAP Business One 10.0. 
                 RÈGLE 1 : Uniquement B1 10.0 standard (pas ECC, pas S/4HANA).
                 RÈGLE 2 : Dis 'Je ne sais pas' si la fonction n'existe pas. Zéro hallucination.
                 Processus : {st.session_state.bpmn_tasks_only}
