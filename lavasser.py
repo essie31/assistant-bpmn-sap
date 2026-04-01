@@ -60,7 +60,7 @@ if check_password():
     client = Groq(api_key=GROQ_API_KEY)
     
     # Modèle le plus intelligent de Groq (équivalent GPT-4) pour des réponses longues et sans erreurs
-    MODEL_NAME = "mixtral-8x7b-32768"
+    MODEL_NAME = "gemma2-9b-it"
 
     def parse_bpmn_from_file(file_object):
         """Extrait uniquement les tâches pour ne pas saturer le quota Groq."""
