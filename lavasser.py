@@ -64,8 +64,21 @@ if check_password():
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=GROQ_API_KEY)
     
-    # Modèle extrêmement performant et rapide
+    # ✅ MISE À JOUR DU MODÈLE ICI : Utilisation de la version la plus récente de Llama 3
     MODEL_NAME = "llama-3.3-70b-versatile"
+
+    # --- LISTE DES PILIERS ---
+    PILIERS = {
+        1: "Big Data / Analytics",
+        2: "Robots Autonomes",
+        3: "Simulation",
+        4: "Intégration Systèmes",
+        5: "IIoT",
+        6: "Cybersécurité",
+        7: "Cloud Computing",
+        8: "Fabrication Additive",
+        9: "Réalité Augmentée"
+    }
 
     def parse_bpmn_from_file(file_object):
         try:
@@ -92,73 +105,58 @@ if check_password():
                 elements[elem_id] = {'name': elem_name, 'type': elem_type, 'lane': lane_name}
                 if elem_name != 'Sans nom':
                     tasks_list.append(f"- Étape: {lane_name} | Processus: {elem_name} | Type: {elem_type}")
-        
-        flows = []
-        for flow in root.findall('.//bpmn:sequenceFlow', ns):
-            source = flow.get('sourceRef')
-            target = flow.get('targetRef')
-            condition = flow.get('name', '') 
-            if source in elements and target in elements:
-                s_elem = elements[source]
-                t_elem = elements[target]
-                flow_desc = f"De [{s_elem['lane']}] '{s_elem['name']}' -> Vers [{t_elem['lane']}] '{t_elem['name']}'"
-                if condition: flow_desc += f" [Condition: {condition}]"
-                flows.append(flow_desc)
                 
-        return "\n".join(tasks_list), "\n".join(flows)
+        return "\n".join(tasks_list)
 
     # ==========================================
-    # 🤖 FONCTIONS DE GÉNÉRATION GROQ
+    # 🤖 FONCTIONS DE GÉNÉRATION GROQ SÉPARÉES
     # ==========================================
 
-    def generate_part1_analysis(tasks_text, flows_text):
+    def generate_part1_analysis(tasks_text):
         prompt = f"""
-        Voici les données du processus métier complet :
+        Voici les données du processus métier :
         TÂCHES : {tasks_text}
-        FLUX ET LOGIQUE : {flows_text}
 
-        Génère une analyse EXTRÊMEMENT DÉTAILLÉE, PRÉCISE et SANS AUCUNE HALLUCINATION.
+        Génère une analyse EXTRÊMEMENT PRÉCISE, FACTUELLE et SANS AUCUNE HALLUCINATION.
         Structure ta réponse EXACTEMENT avec ces 3 parties :
 
         ### 1. 📊 Tableau Synthétique des Tâches
-        Dresse un tableau Markdown exhaustif récapitulant les tâches.
+        Dresse un tableau Markdown concis récapitulant les tâches (Étape, Processus, Type de Tâche).
 
         ### 2. 📝 Description Logique du Processus
-        Rédige une description chronologique approfondie du flux, en expliquant les dépendances entre les étapes.
+        Rédige une description chronologique, professionnelle et concise du flux.
 
-        ### 3. 🔵 Propositions d'Intégration SAP Business One 10.0 (ULTRA DÉTAILLÉES)
-        RÈGLES STRICTES :
-        - Limite-toi STRICTEMENT au standard SAP B1 10.0. Interdiction absolue d'inventer des menus.
-        - Ignore les tâches 100% physiques.
-        - Si pas de standard, précise "Nécessite un Champ Utilisateur (UDF)".
+        ### 3. 🔵 Propositions d'Intégration SAP Business One 10.0
+        RÈGLES STRICTES ANTI-HALLUCINATION POUR CETTE SECTION :
+        - Règle 1 : Limite-toi STRICTEMENT au standard de SAP Business One 10.0. Interdiction absolue d'inventer des menus.
+        - Règle 2 : Ne propose une intégration SAP QUE pour les tâches administratives ou informatisées. Ignore les tâches 100% physiques.
+        - Règle 3 : Si une tâche pertinente n'a pas d'écran standard exact, précise "Nécessite un UDF". Ne mens jamais sur le standard.
 
-        Pour CHAQUE tâche pertinente, sois très généreux en détails techniques. Format requis :
+        Format exact à puces :
         * **[Nom exact de la tâche]**
           * **Module :** [Ex: Ventes]
           * **Écran cible :** [Ex: Commande client]
-          * **Chemin de navigation :** [Ex: Menu principal > Ventes - Client > Commande client]
-          * **Détails de l'action SAP :** [Explique de manière approfondie quels champs remplir, quelles sont les données de base pré-requises (ex: Fiche Partenaire, Article), et quel sera l'impact système (ex: engagement de stock, écriture comptable préliminaire).]
+          * **Proposition :** [Explication technique très précise]
         """
         response = client.chat.completions.create(
             model=MODEL_NAME,
             messages=[
-                {"role": "system", "content": "Tu es un Consultant Expert Senior SAP Business One 10.0 et un Analyste BPMN."},
+                {"role": "system", "content": "Tu es un Consultant Expert SAP Business One 10.0 et un Analyste BPMN Senior."},
                 {"role": "user", "content": prompt}
             ],
             temperature=0.0
         )
         return response.choices[0].message.content
 
-    def generate_part2_evaluation(tasks_text):
+    def generate_single_pillar(tasks_text, pillar_name):
         prompt = f"""
-        Génère 9 petits tableaux d'évaluation, un pour CHAQUE pilier de l'Industrie 4.0.
-        (Big Data, Robots, Simulation, Intégration, IIoT, Cybersécurité, Cloud, Additif, Réalité Augmentée).
+        Génère un tableau d'évaluation UNIQUEMENT pour le pilier : {pillar_name}.
         
-        RÈGLE ABSOLUE : Tu dois lister et évaluer TOUTES les tâches ci-dessous dans CHACUN des 9 tableaux, sans exception.
+        RÈGLE ABSOLUE : Tu dois lister et évaluer TOUTES les tâches ci-dessous, sans exception.
         TÂCHES :
         {tasks_text}
 
-        Colonnes des 9 tableaux Markdown : `Tâche BPMN` | `Score (1-5)` | `Justification`.
+        Colonnes du tableau Markdown : `Tâche BPMN` | `Score {pillar_name} (1-5)` | `Justification`.
         ASTUCE: Justification très courte (3 mots max).
         """
         response = client.chat.completions.create(
@@ -205,91 +203,97 @@ if check_password():
     # ==========================================
     if "chat_history" not in st.session_state: st.session_state.chat_history = []
     if "bpmn_tasks_only" not in st.session_state: st.session_state.bpmn_tasks_only = ""
-    if "bpmn_flows_only" not in st.session_state: st.session_state.bpmn_flows_only = ""
     
     if "step1_text" not in st.session_state: st.session_state.step1_text = ""
-    if "step2_text" not in st.session_state: st.session_state.step2_text = ""
     if "step3_text" not in st.session_state: st.session_state.step3_text = ""
+    
+    if "pillar_scores" not in st.session_state: 
+        st.session_state.pillar_scores = {i: "" for i in range(1, 10)}
 
     st.title("💡 Hub d'Intégration : BPMN ➔ SAP Business One 10.0")
 
-    tab1, tab2 = st.tabs(["📊 Évaluation en 3 Étapes", "💬 Assistant SAP"])
+    tab1, tab2 = st.tabs(["📊 Évaluation à la Carte", "💬 Assistant SAP"])
 
     with tab1:
-        st.write("Importez votre processus. Génération robuste via Groq Llama 3 ⚡.")
+        st.write("Importez votre processus. 🖨️ *Astuce : Faites Ctrl+P pour imprimer un rapport propre.*")
         uploaded_file = st.file_uploader("Importez votre fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
             # Extraction
             if not st.session_state.bpmn_tasks_only:
-                tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
+                tasks_text = parse_bpmn_from_file(uploaded_file)
                 if tasks_text is None: st.error("Erreur de lecture du fichier.")
-                else: 
-                    st.session_state.bpmn_tasks_only = tasks_text
-                    st.session_state.bpmn_flows_only = flows_text
+                else: st.session_state.bpmn_tasks_only = tasks_text
 
-            # BOUTON DE RÉINITIALISATION
+            # BOUTON 1 : RESET
             if st.button("🔄 Réinitialiser complètement", type="secondary"):
                 st.session_state.step1_text = ""
-                st.session_state.step2_text = ""
                 st.session_state.step3_text = ""
+                st.session_state.pillar_scores = {i: "" for i in range(1, 10)}
                 st.rerun()
 
             st.divider()
             
             # =========================================================
-            # LES 3 BOUTONS PRINCIPAUX
+            # SECTION 1 : SAP & MÉTIER 
             # =========================================================
-            col_b1, col_b2, col_b3 = st.columns(3)
-
-            with col_b1:
-                if not st.session_state.step1_text:
-                    if st.button("1️⃣ Analyse Métier & SAP Détaillée", use_container_width=True, type="primary"):
-                        with st.spinner("Analyse approfondie en cours..."):
-                            try:
-                                st.session_state.step1_text = generate_part1_analysis(st.session_state.bpmn_tasks_only, st.session_state.bpmn_flows_only)
-                                st.rerun()
-                            except Exception as e: st.error(f"Erreur : {e}")
-                else:
-                    st.success("✅ Étape 1 : Terminée")
-
-            with col_b2:
-                if not st.session_state.step2_text:
-                    if st.button("2️⃣ Les 9 Tableaux de Scoring", use_container_width=True, type="primary"):
-                        with st.spinner("Génération des 9 tableaux... (Ultra rapide ⚡)"):
-                            try:
-                                st.session_state.step2_text = generate_part2_evaluation(st.session_state.bpmn_tasks_only)
-                                st.rerun()
-                            except Exception as e: st.error(f"Erreur : {e}")
-                else:
-                    st.success("✅ Étape 2 : Terminée")
-
-            with col_b3:
-                if not st.session_state.step3_text:
-                    if st.button("3️⃣ Graphique Radar Final", use_container_width=True, type="primary"):
-                        with st.spinner("Calcul des scores..."):
-                            try:
-                                st.session_state.step3_text = generate_part3_radar(st.session_state.bpmn_tasks_only)
-                                st.rerun()
-                            except Exception as e: st.error(f"Erreur : {e}")
-                else:
-                    st.success("✅ Étape 3 : Terminée")
+            st.subheader("Étape 1 : Analyse Métier & Architecture SAP B1")
+            if not st.session_state.step1_text:
+                if st.button("📝 Générer l'Analyse Métier et SAP", type="primary"):
+                    with st.spinner("Analyse approfondie du standard SAP en cours..."):
+                        try:
+                            st.session_state.step1_text = generate_part1_analysis(st.session_state.bpmn_tasks_only)
+                            st.rerun()
+                        except Exception as e: st.error(f"Erreur : {e}")
+            else:
+                st.success("✅ Analyse SAP générée avec succès.")
+                st.markdown(st.session_state.step1_text)
 
             st.divider()
 
             # =========================================================
-            # AFFICHAGE DES RÉSULTATS DANS L'ORDRE
+            # SECTION 2 : LES 9 PILIERS I4.0 
             # =========================================================
-            if st.session_state.step1_text:
-                st.markdown(st.session_state.step1_text)
-                st.divider()
+            st.subheader("Étape 2 : Évaluation des 9 Piliers (Industrie 4.0)")
+            st.write("Générez les tableaux un par un. (Avec Groq, c'est presque instantané ⚡)")
+            
+            # Grille de 3 colonnes pour les 9 boutons
+            cols = st.columns(3)
+            for i, (num, name) in enumerate(PILIERS.items()):
+                col = cols[i % 3]
+                with col:
+                    if not st.session_state.pillar_scores[num]:
+                        if st.button(f"⚙️ Générer : {name}", key=f"btn_{num}", use_container_width=True):
+                            with st.spinner(f"Génération rapide pour {name}..."):
+                                try:
+                                    st.session_state.pillar_scores[num] = generate_single_pillar(st.session_state.bpmn_tasks_only, name)
+                                    st.rerun()
+                                except Exception as e: st.error(f"Erreur : {e}")
+                    else:
+                        st.success(f"✅ {name} généré")
 
-            if st.session_state.step2_text:
-                st.markdown(st.session_state.step2_text)
-                st.divider()
+            # Affichage direct et visible des tableaux générés
+            for num, name in PILIERS.items():
+                if st.session_state.pillar_scores[num]:
+                    st.markdown(f"### 📊 Score : {name}")
+                    st.markdown(st.session_state.pillar_scores[num])
+                    st.write("---")
 
-            if st.session_state.step3_text:
-                st.subheader("📊 Scores Globaux (9 Piliers)")
+            st.divider()
+
+            # =========================================================
+            # SECTION 3 : RÉSULTATS & RADAR 
+            # =========================================================
+            st.subheader("Étape 3 : Synthèse & Graphique Radar")
+            if not st.session_state.step3_text:
+                if st.button("📈 Générer le Radar Final", type="primary"):
+                    with st.spinner("Calcul des notes finales..."):
+                        try:
+                            st.session_state.step3_text = generate_part3_radar(st.session_state.bpmn_tasks_only)
+                            st.rerun()
+                        except Exception as e: st.error(f"Erreur : {e}")
+            else:
+                st.success("✅ Graphique Radar généré.")
                 report_part3 = st.session_state.step3_text
                 json_match = re.search(r'```json\n(.*?)\n```', report_part3, re.DOTALL)
                 
