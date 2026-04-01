@@ -8,7 +8,7 @@ import time
 st.set_page_config(page_title="App 1 : Analyse & Architecture SAP", page_icon="📊", layout="wide")
 
 # ==========================================
-# 🔒 SYSTÈME DE SÉCURITÉ
+# 🔒 SÉCURITÉ
 # ==========================================
 CODE_SECRET = st.secrets["APP_PASSWORD"] 
 
@@ -20,7 +20,8 @@ def check_password():
             if pwd == CODE_SECRET:
                 st.session_state["password_correct"] = True
                 st.rerun()
-            else: st.error("😕 Code d'accès incorrect.")
+            else:
+                st.error("😕 Code d'accès incorrect.")
         return False
     return True
 
@@ -29,9 +30,10 @@ if check_password():
     # --- BARRE LATÉRALE ---
     with st.sidebar:
         st.title("🚀 Navigation")
+        st.info("App 1 : Analyse d'Architecture")
+        # Lien vers l'App 2 (Chat) à configurer
         st.link_button("💬 Assistant de Configuration (App 2)", "https://votre-app-chat.streamlit.app")
         st.divider()
-        st.write("Moteur : Gemini 1.5 Pro")
 
     # ==========================================
     # 🔑 CONFIGURATION GOOGLE
@@ -39,9 +41,10 @@ if check_password():
     try:
         API_KEY = st.secrets["API_KEY"] 
         client = genai.Client(api_key=API_KEY)
-        MODEL_NAME = 'gemini-1.5-pro'
+        # Changement du nom du modèle pour la version la plus stable
+        MODEL_NAME = 'gemini-1.5-flash' 
     except Exception as e:
-        st.error("Erreur de configuration de la clé API. Vérifiez vos secrets Streamlit.")
+        st.error("Problème de clé API.")
 
     def parse_bpmn_from_file(file_object):
         try:
@@ -70,28 +73,26 @@ if check_password():
 
     def generate_detailed_analysis(tasks, flows):
         prompt = f"""
-        Tu es un Architecte Senior SAP Business One 10.0. 
+        Tu es un Architecte Senior SAP Business One 10.0.
+        PROCESSUS :
         TÂCHES : {tasks}
         FLUX : {flows}
 
         Génère un rapport d'architecture technique exhaustif avec :
         1. 📊 Tableau des Tâches & Rôles.
-        2. 📝 Analyse Logique & Métier (4 paragraphes minimum).
-        3. 🔵 Architecture SAP B1 10.0 (Objet Technique, Chemin Menu, Données Maîtres et Impact Stock/Compta).
+        2. 📝 Analyse Logique & Métier (Détaillée).
+        3. 🔵 Architecture SAP B1 10.0 (Objet Technique, Chemin Menu standard, Données Maîtres et Impact Stock/Compta).
         """
         try:
+            # Appel API avec le nom de modèle corrigé
             response = client.models.generate_content(
                 model=MODEL_NAME, 
                 contents=prompt,
-                config=types.GenerateContentConfig(temperature=0.1, max_output_tokens=8192)
+                config=types.GenerateContentConfig(temperature=0.1)
             )
             return response.text
         except Exception as e:
-            # Gestion spécifique de l'erreur de quota (Rate Limit)
-            if "429" in str(e) or "quota" in str(e).lower():
-                return "⚠️ L'API est surchargée. Veuillez attendre 30 secondes et cliquer à nouveau sur le bouton."
-            else:
-                return f"❌ Erreur lors de la génération : {str(e)}"
+            return f"❌ Erreur lors de la génération : {str(e)}"
 
     # ==========================================
     # 🏁 UI PRINCIPALE
@@ -100,15 +101,11 @@ if check_password():
     uploaded_file = st.file_uploader("Fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
     if uploaded_file:
-        if st.button("🚀 Générer l'Analyse & Intégration SAP", type="primary"):
-            with st.spinner("L'IA analyse votre processus..."):
+        if st.button("🚀 Générer l'Analyse SAP", type="primary"):
+            with st.spinner("Analyse en cours..."):
                 tasks_txt, flows_txt = parse_bpmn_from_file(uploaded_file)
                 if tasks_txt:
                     report = generate_detailed_analysis(tasks_txt, flows_txt)
-                    if report.startswith("⚠️") or report.startswith("❌"):
-                        st.warning(report)
-                    else:
-                        st.success("Rapport généré !")
-                        st.markdown(report)
+                    st.markdown(report)
                 else:
-                    st.error("Fichier BPMN invalide.")
+                    st.error("Fichier invalide.")
