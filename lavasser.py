@@ -25,7 +25,7 @@ st.markdown("""
         display: none !important;
     }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    table { page-break-inside: auto; width: 100% !important; }
+    table { page-break-inside: auto; width: 100% !important; font-size: 11px; }
     tr { page-break-inside: avoid; page-break-after: auto; }
     h2, h3 { page-break-after: avoid; }
 }
@@ -146,14 +146,13 @@ if check_password():
           * **Chemin de navigation :** [Chemin]
           * **Proposition d'automatisation :** [Détail]
         """
-        # TEMPÉRATURE À 0.1 POUR ÊTRE FACTUEL
         response = model.generate_content(
             prompt,
             generation_config=genai.types.GenerationConfig(temperature=0.1)
         )
         return response.text
 
-    # --- FONCTION ÉTAPE 2 : MATRICE & RADAR ---
+    # --- FONCTION ÉTAPE 2 : MATRICE UNIQUE & RADAR ---
     def generate_part2_evaluation(tasks_text, flows_text):
         model = genai.GenerativeModel(get_best_model())
         prompt = f"""
@@ -165,10 +164,10 @@ if check_password():
 
         Génère EXACTEMENT ces 2 parties en français :
 
-        ### 4. 🏭 Évaluation des Tâches selon les 9 Piliers (Industrie 4.0)
-        Génère 9 petits tableaux Markdown, un pour chaque pilier de l'Industrie 4.0.
-        ATTENTION : Évalue TOUTES les tâches listées au début du prompt, sans en oublier une seule.
-        Colonnes du tableau : `Tâche BPMN` | `Score (1-5)` | `Justification`.
+        ### 4. 🏭 Matrice d'Évaluation Industrie 4.0 (Les 9 Piliers)
+        Génère UN SEUL grand tableau Markdown évaluant TOUTES les tâches listées au début du prompt, sans AUCUNE exception.
+        Colonnes du tableau : `Tâche` | `Big Data` | `Robots` | `Simul.` | `Intégr.` | `IIoT` | `Cyber.` | `Cloud` | `Additif` | `RA` | `Justification`.
+        CONTRAINTE VITALE POUR LA MÉMOIRE : Pour chaque tâche (ligne), attribue un score de 1 à 5 sous chaque pilier. La colonne `Justification` doit faire 3 MOTS MAXIMUM en style télégraphique (ex: "Fort potentiel", "Processus manuel").
 
         ### 5. SCORES_JSON
         À la toute fin, inclut un bloc JSON valide avec la note globale moyenne de 1 à 5 du processus entier pour les 9 piliers. Il ne doit y avoir aucun texte après ce bloc.
@@ -230,7 +229,7 @@ if check_password():
         uploaded_file = st.file_uploader("Importez votre fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
-            # Si on change de fichier, on réinitialise l'état
+            # Réinitialisation si l'utilisateur veut recommencer
             if st.button("🔄 Réinitialiser l'analyse pour un nouveau fichier"):
                 st.session_state.part1_done = False
                 st.session_state.part2_done = False
@@ -241,7 +240,7 @@ if check_password():
             # BOUTON 1 : ANALYSE MÉTIER & SAP
             if not st.session_state.part1_done:
                 if st.button("1️⃣ Générer l'Analyse Métier & Intégration SAP", type="primary"):
-                    with st.spinner("Analyse SAP en cours... (Étape 1/2)"):
+                    with st.spinner("Analyse métier et SAP en cours... (Étape 1/2)"):
                         tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
                         if tasks_text is None:
                             st.error(flows_text)
@@ -262,8 +261,8 @@ if check_password():
 
                 # BOUTON 2 : SCORES & RADAR (N'apparait qu'après l'étape 1)
                 if not st.session_state.part2_done:
-                    if st.button("2️⃣ Générer l'Évaluation Industrie 4.0 & Radar", type="primary"):
-                        with st.spinner("Création des 9 tableaux de scores et du Radar... (Étape 2/2)"):
+                    if st.button("2️⃣ Générer la Matrice Industrie 4.0 & le Radar", type="primary"):
+                        with st.spinner("Création de la Matrice I4.0 et du Radar... (Étape 2/2)"):
                             # On récupère les textes du contexte sauvegardé
                             context_parts = st.session_state.bpmn_context.split("\n\nFLUX:\n")
                             tasks_text = context_parts[0].replace("TÂCHES:\n", "")
@@ -284,15 +283,17 @@ if check_password():
                     json_match = re.search(r'```json\n(.*?)\n```', report_part2, re.DOTALL)
                     clean_report_part2 = re.sub(r'### 5\. SCORES_JSON.*', '', report_part2, flags=re.DOTALL)
                     
-                    col_text, col_radar = st.columns([2, 1])
+                    # Affichage pleine largeur de la Matrice (pour que les 11 colonnes respirent)
+                    st.markdown(clean_report_part2)
+                    st.divider()
                     
-                    with col_text:
-                        st.markdown(clean_report_part2)
+                    # Radar et Tableau global centrés en bas
+                    if json_match:
+                        json_data = json_match.group(1)
+                        st.subheader("📊 Scores Globaux (9 Piliers)")
                         
-                    with col_radar:
-                        if json_match:
-                            json_data = json_match.group(1)
-                            st.subheader("📊 Scores Globaux (9 Piliers)")
+                        col_vide1, col_centre, col_vide2 = st.columns([1, 2, 1])
+                        with col_centre:
                             try:
                                 scores_dict = json.loads(json_data)
                                 df_scores = pd.DataFrame(list(scores_dict.items()), columns=['Pilier 4.0', 'Note globale'])
@@ -303,8 +304,8 @@ if check_password():
                             fig = draw_radar_chart(json_data)
                             if fig:
                                 st.plotly_chart(fig, use_container_width=True)
-                        else:
-                            st.warning("Le graphique radar n'a pas pu être généré. Le format JSON n'a pas été trouvé.")
+                    else:
+                        st.warning("Le graphique radar n'a pas pu être généré. Le format JSON n'a pas été trouvé.")
 
     with tab2:
         st.header("Discutez avec votre Consultant SAP B1")
@@ -321,12 +322,11 @@ if check_password():
                     st.markdown(user_prompt)
                 st.session_state.chat_history.append({"role": "user", "content": user_prompt})
 
-                # --- LE BOUCLIER ANTI-HALLUCINATION EST DE RETOUR ICI ---
                 chat_context = f"""
                 Tu es un consultant expert SAP Business One 10.0. L'utilisateur te pose une question sur son processus métier.
                 
                 RÈGLE N°1 : Tes réponses doivent s'appliquer STRICTEMENT ET UNIQUEMENT à SAP Business One 10.0. Ne donne jamais de chemins de menus provenant de SAP S/4HANA ou SAP ECC.
-                RÈGLE N°2 : Si tu n'es pas absolument certain du chemin exact du menu dans SAP B1, ou si la fonctionnalité n'existe pas en standard, TU DOIS dire 'Je ne suis pas certain' ou 'Cette fonction n'existe pas en standard'. N'invente JAMAIS de menus ou de cases à cocher imaginaires.
+                RÈGLE N°2 : Si tu n'es pas absolument certain du chemin exact du menu dans SAP B1, ou si la fonctionnalité n'existe pas en standard, TU DOIS dire 'Je ne suis pas certain' ou 'Cette fonction n'existe pas en standard'.
                 
                 Voici les données de son processus actuel :
                 {st.session_state.bpmn_context}
@@ -340,7 +340,6 @@ if check_password():
                         try:
                             model_name = get_best_model()
                             model = genai.GenerativeModel(model_name)
-                            # TEMPÉRATURE À 0.1 POUR UN CHAT RIGOUREUX SANS HALLUCINATIONS
                             response = model.generate_content(
                                 chat_context,
                                 generation_config=genai.types.GenerationConfig(temperature=0.1)
