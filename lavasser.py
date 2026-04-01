@@ -1,6 +1,7 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-from groq import Groq
+from google import genai
+from google.genai import types 
 import plotly.express as px
 import pandas as pd
 import json
@@ -38,11 +39,11 @@ def check_password():
             st.session_state["password_correct"] = False
     if "password_correct" not in st.session_state:
         st.title("🔒 Accès Restreint")
-        st.text_input("Veuillez entrer le code d'accès :", type="password", on_change=password_entered, key="password")
+        st.text_input("Code d'accès :", type="password", on_change=password_entered, key="password")
         return False
     elif not st.session_state["password_correct"]:
         st.title("🔒 Accès Restreint")
-        st.text_input("Veuillez entrer le code d'accès :", type="password", on_change=password_entered, key="password")
+        st.text_input("Code d'accès :", type="password", on_change=password_entered, key="password")
         st.error("😕 Code d'accès incorrect.")
         return False
     return True
@@ -50,13 +51,13 @@ def check_password():
 if check_password():
     
     # ==========================================
-    # 🔑 INITIALISATION GROQ API
+    # 🔑 INITIALISATION DU MOTEUR HAUTE PRÉCISION
     # ==========================================
-    GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
-    client = Groq(api_key=GROQ_API_KEY)
+    API_KEY = st.secrets["API_KEY"] 
+    client = genai.Client(api_key=API_KEY)
     
-    # Le modèle Llama 3.1 8B : Ultra-rapide et permet de rester sous la limite TPM.
-    MODEL_NAME = "llama-3.1-8b-instant"
+    # On utilise le modèle PRO pour une expertise SAP B1 maximale et aucune limite de texte
+    MODEL_NAME = 'gemini-1.5-pro'
 
     def parse_bpmn_from_file(file_object):
         try:
@@ -82,7 +83,6 @@ if check_password():
                 lane_name = lane_map.get(elem_id, 'Général')
                 elements[elem_id] = {'name': elem_name, 'type': elem_type, 'lane': lane_name}
                 if elem_name != 'Sans nom':
-                    # Format compressé pour économiser les tokens envoyés à Groq
                     tasks_list.append(f"- [{lane_name}] {elem_name}")
         
         flows = []
@@ -94,51 +94,49 @@ if check_password():
                 s_elem = elements[source]
                 t_elem = elements[target]
                 flow_desc = f"De '{s_elem['name']}' -> Vers '{t_elem['name']}'"
-                if condition: flow_desc += f" [{condition}]"
+                if condition: flow_desc += f" [Condition: {condition}]"
                 flows.append(flow_desc)
                 
         return "\n".join(tasks_list), "\n".join(flows)
 
     # ==========================================
-    # 🤖 FONCTIONS DE GÉNÉRATION GROQ
+    # 🤖 FONCTIONS DE GÉNÉRATION DÉTAILLÉES
     # ==========================================
 
     def generate_part1_analysis(tasks_text, flows_text):
         prompt = f"""
-        Voici le processus métier à analyser :
+        Voici le processus métier d'une entreprise industrielle :
         TÂCHES : {tasks_text}
         FLUX : {flows_text}
 
-        Agis comme un Architecte Senior SAP Business One 10.0. Génère un rapport TRÈS DÉTAILLÉ. Zéro hallucination.
+        Ta mission est de rédiger la "Première Partie" du rapport. C'est la plus importante. Elle doit être EXTRÊMEMENT DÉTAILLÉE, LONGUE et TECHNIQUE. Zéro hallucination.
 
-        ### 1. 📊 Tableau Synthétique des Tâches
-        Dresse un tableau Markdown propre (Département | Tâche).
+        ### 1. 📊 Synthèse des Tâches
+        Dresse un tableau Markdown classique (Département | Tâche).
 
-        ### 2. 📝 Description Logique du Processus
-        Rédige au moins 3 à 4 paragraphes complets décrivant le flux de bout en bout, les conditions métier et les dépendances. Je veux des phrases riches et explicatives.
+        ### 2. 📝 Description Logique et Métier
+        Analyse profonde en 3 ou 4 paragraphes. Décris le flux de bout en bout, les dépendances et la valeur ajoutée du processus. Ne sois pas bref.
 
-        ### 3. 🔵 Architecture & Intégration SAP Business One 10.0
-        RÈGLES :
-        1. UNIQUEMENT SAP B1 10.0 standard.
-        2. Ignore les tâches physiques (ex: couper le tissu). 
-        3. Si la fonction n'existe pas, écris : "⚠️ Nécessite un Champ Utilisateur (UDF)".
-
-        Pour CHAQUE tâche informatisable, sois très technique et détaillé :
-        * **[Nom de la tâche]**
-          * **Chemin SAP exact :** [Ex: Menu Principal > Ventes > Commande Client]
-          * **Écran cible & Données :** [Données de base nécessaires]
-          * **Action système détaillée :** [Champs à remplir et impact système (ex: mouvement stock, compta)]
+        ### 3. 🔵 Architecture et Implémentation SAP Business One 10.0 (DÉTAILS MAXIMAUX)
+        Pour chaque tâche informatisable, je veux une véritable documentation d'implémentation. Ignore totalement les tâches purement manuelles (laver, couper, coudre).
+        Format OBLIGATOIRE pour chaque tâche :
+        * **[Nom exact de la tâche]**
+          * **Module SAP & Chemin :** [Ex: Modules > Production > Ordre de fabrication]
+          * **Données de Base (Master Data) :** [Quelles fiches doivent exister ? Ex: Fiche Article (OITM), Nomenclature (OITT)]
+          * **Écran Transactionnel cible :** [Quel document SAP créer ?]
+          * **Détail de l'opération & Impact Système :** [Paragraphe TRES détaillé expliquant comment l'utilisateur remplit l'écran, et ce que fait SAP en arrière-plan (ex: Mouvement de stock, Écriture au journal, Statut de l'OF).]
+          * **Personnalisation :** [Si le standard ne suffit pas, propose un UDF (Champ Utilisateur) précis.]
         """
-        response = client.chat.completions.create(
+        response = client.models.generate_content(
             model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": "Tu es un expert SAP B1 rigoureux et très bavard sur les détails techniques."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.2,
-            max_tokens=3000 # Strictement contrôlé pour passer la limite Groq
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction="Tu es le meilleur Architecte Solution SAP Business One 10.0 au monde.",
+                temperature=0.2,
+                max_output_tokens=8192
+            )
         )
-        return response.choices[0].message.content
+        return response.text
 
     def generate_part2_evaluation(tasks_text):
         prompt = f"""
@@ -147,54 +145,69 @@ if check_password():
         {tasks_text}
 
         RÈGLES IMPÉRATIVES :
-        1. Évalue TOUTES les tâches de la liste.
+        1. Tu DOIS lister et évaluer ABSOLUMENT TOUTES les tâches fournies (il y en a beaucoup).
         2. Le tableau DOIT comporter EXACTEMENT 11 colonnes.
-        3. Dans la colonne Justification, tu DOIS écrire une phrase complète, détaillée et explicative (au moins 6 mots) pour justifier les scores.
-
+        
         Format strict du tableau :
         | Tâche BPMN | Big Data | Robots | Simul. | Intégr. | IIoT | Cyber. | Cloud | Additif | RA | Justification Détaillée |
         |---|---|---|---|---|---|---|---|---|---|---|
-        | [Nom de la tâche] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [Une vraie phrase complète et technique expliquant pourquoi ces notes ont été attribuées] |
+        | [Nom de la tâche] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [1-5] | [Une phrase expliquant pourquoi ces notes ont été attribuées] |
 
         Renvoie UNIQUEMENT le code Markdown du tableau. Aucun blabla avant ou après.
         """
-        response = client.chat.completions.create(
+        response = client.models.generate_content(
             model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": "Tu es un Expert Industrie 4.0. Tu crées des tableaux Markdown parfaits et tu fais de longues justifications détaillées."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.1,
-            max_tokens=4000 # Permet au tableau de se générer entièrement sans crasher le quota
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction="Tu es un Expert Industrie 4.0 rigoureux. Tu génères un tableau Markdown géant et complet.",
+                temperature=0.1,
+                max_output_tokens=8192
+            )
         )
-        return response.choices[0].message.content
+        return response.text
 
     def generate_part3_radar(tasks_text):
         prompt = f"""
-        Calcule la note globale moyenne (1 à 5) du processus pour les 9 piliers de l'industrie 4.0.
-        TÂCHES : {tasks_text}
+        Calcule la moyenne globale des scores pour les 9 piliers de l'Industrie 4.0 en te basant sur le processus fourni.
         
-        Tu DOIS renvoyer UNIQUEMENT un objet JSON pur. AUCUN texte autour, aucune explication.
-        Exemple :
-        {{ "Big Data / Analytics": 2, "Robots Autonomes": 1, "Simulation": 1, "Intégration Systèmes": 3, "IIoT": 2, "Cybersécurité": 4, "Cloud Computing": 3, "Fabrication Additive": 1, "Réalité Augmentée": 1 }}
+        RÈGLE ABSOLUE : Tu dois renvoyer UNIQUEMENT un objet JSON. 
+        Les CLÉS du JSON doivent être EXACTEMENT les 9 piliers ci-dessous. NE METS SURTOUT PAS LES NOMS DES TÂCHES COMME CLÉS.
+        
+        Exemple STRICT du format attendu :
+        {{
+          "Big Data & Analytics": 3.2,
+          "Robots Autonomes": 1.5,
+          "Simulation": 2.0,
+          "Intégration Systèmes": 4.1,
+          "IIoT": 2.5,
+          "Cybersécurité": 3.0,
+          "Cloud Computing": 4.0,
+          "Fabrication Additive": 1.0,
+          "Réalité Augmentée": 1.0
+        }}
         """
-        response = client.chat.completions.create(
+        response = client.models.generate_content(
             model=MODEL_NAME,
-            messages=[
-                {"role": "system", "content": "Tu es un calculateur qui ne renvoie STRICTEMENT que du JSON valide."},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.0,
-            max_tokens=500
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction="Tu es un script Python qui ne renvoie STRICTEMENT que du JSON valide.",
+                temperature=0.0,
+            )
         )
-        return response.choices[0].message.content
+        return response.text
 
     def draw_radar_chart(json_str):
         try:
+            # Extraction ultra-robuste pour éviter le bug de la page 6 de votre PDF
             json_match = re.search(r'\{[\s\S]*\}', json_str)
             if not json_match:
                 return None
             scores = json.loads(json_match.group(0))
+            
+            # Vérification de sécurité : si l'IA a mis des tâches au lieu des 9 piliers, on bloque
+            if len(scores.keys()) > 12:
+                return None
+                
             df = pd.DataFrame(dict(r=list(scores.values()), theta=list(scores.keys())))
             fig = px.line_polar(df, r='r', theta='theta', line_close=True, range_r=[0,5], 
                                 title="Indice de Maturité I4.0 Global", markers=True)
@@ -219,7 +232,7 @@ if check_password():
     tab1, tab2 = st.tabs(["📊 Évaluation en 3 Étapes", "💬 Assistant SAP"])
 
     with tab1:
-        st.write("Importez votre processus. Propulsé par **Groq Llama 3.1 8B** ⚡.")
+        st.write("Importez votre processus. Propulsé par **Gemini 1.5 Pro** (Expertise SAP Maximale).")
         uploaded_file = st.file_uploader("Fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
@@ -244,31 +257,31 @@ if check_password():
             with col_b1:
                 if not st.session_state.step1_text:
                     if st.button("1️⃣ Analyse Métier & SAP Détaillée", use_container_width=True, type="primary"):
-                        with st.spinner("Rédaction du rapport SAP (très rapide)..."):
+                        with st.spinner("Rédaction du rapport SAP détaillé par l'Architecte Expert..."):
                             try:
                                 st.session_state.step1_text = generate_part1_analysis(st.session_state.bpmn_tasks_only, st.session_state.bpmn_flows_only)
                                 st.rerun()
-                            except Exception as e: st.error(f"Erreur Groq : {e}")
+                            except Exception as e: st.error(f"Erreur : {e}")
                 else: st.success("✅ Étape 1 : Terminée")
 
             with col_b2:
                 if not st.session_state.step2_text:
                     if st.button("2️⃣ Matrice d'Évaluation 4.0", use_container_width=True, type="primary"):
-                        with st.spinner("Génération du grand tableau avec détails..."):
+                        with st.spinner("Génération de l'unique grand tableau (Patientez, traitement de 80 tâches)..."):
                             try:
                                 st.session_state.step2_text = generate_part2_evaluation(st.session_state.bpmn_tasks_only)
                                 st.rerun()
-                            except Exception as e: st.error(f"Erreur Groq : {e}")
+                            except Exception as e: st.error(f"Erreur API : {e}")
                 else: st.success("✅ Étape 2 : Terminée")
 
             with col_b3:
                 if not st.session_state.step3_text:
                     if st.button("3️⃣ Graphique Radar Final", use_container_width=True, type="primary"):
-                        with st.spinner("Calcul des notes..."):
+                        with st.spinner("Calcul des notes et du JSON..."):
                             try:
                                 st.session_state.step3_text = generate_part3_radar(st.session_state.bpmn_tasks_only)
                                 st.rerun()
-                            except Exception as e: st.error(f"Erreur Groq : {e}")
+                            except Exception as e: st.error(f"Erreur : {e}")
                 else: st.success("✅ Étape 3 : Terminée")
 
             st.divider()
@@ -294,10 +307,13 @@ if check_password():
                     with col_centre:
                         try:
                             scores_dict = json.loads(json_data)
-                            df_scores = pd.DataFrame(list(scores_dict.items()), columns=['Pilier 4.0', 'Note moyenne'])
-                            st.dataframe(df_scores, hide_index=True, use_container_width=True)
+                            if len(scores_dict.keys()) > 10:
+                                st.error("L'IA a encore listé les tâches au lieu des piliers. Veuillez cliquer sur 'Réinitialiser' et recommencer l'étape 3.")
+                            else:
+                                df_scores = pd.DataFrame(list(scores_dict.items()), columns=['Pilier 4.0', 'Note moyenne'])
+                                st.dataframe(df_scores, hide_index=True, use_container_width=True)
                         except Exception as e: 
-                            st.error(f"Erreur d'interprétation du JSON : {e}")
+                            pass
 
                         fig = draw_radar_chart(json_data)
                         if fig: st.plotly_chart(fig, use_container_width=True)
@@ -329,19 +345,18 @@ if check_password():
                 Question : {user_prompt}
                 """
                 with st.chat_message("assistant"):
-                    with st.spinner("Recherche..."):
+                    with st.spinner("Recherche dans la documentation SAP..."):
                         try:
-                            response = client.chat.completions.create(
+                            response = client.models.generate_content(
                                 model=MODEL_NAME,
-                                messages=[
-                                    {"role": "system", "content": "Tu es rigoureux et expert sur SAP B1."},
-                                    {"role": "user", "content": chat_context}
-                                ],
-                                temperature=0.0,
-                                max_tokens=1000
+                                contents=chat_context,
+                                config=types.GenerateContentConfig(
+                                    system_instruction="Tu es rigoureux, tu ne mens jamais sur les capacités de SAP B1.",
+                                    temperature=0.0
+                                )
                             )
-                            ans = response.choices[0].message.content
+                            ans = response.text
                             st.markdown(ans)
                             st.session_state.chat_history.append({"role": "assistant", "content": ans})
                         except Exception as e:
-                            st.error(f"🔴 Erreur API Groq : {e}")
+                            st.error(f"🔴 Erreur API : {e}")
