@@ -158,4 +158,6 @@ if uploaded_file:
                             except Exception as e:
                                 st.error("Erreur de formatage du radar.")
                 except Exception as e:
-                    st.error(f
+                    st.error(f"❌ Erreur API : {str(e)}")
+            else:
+                st.error("Fichier illisible.")
