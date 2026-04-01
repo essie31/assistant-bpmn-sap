@@ -137,17 +137,33 @@ if check_password():
     def generate_part1_analysis(tasks_text, flows_text):
         model = genai.GenerativeModel(get_best_model())
         prompt = f"""
-        Tu es un assistant expert combinant les rôles d'Analyste BPMN et Consultant SAP B1 10.0.
-        Voici les données :
+        Tu es un Consultant Expert SAP Business One 10.0 et un Analyste BPMN Senior.
+        Voici les données du processus métier :
         TÂCHES : {tasks_text}
         SÉQUENCE : {flows_text}
 
-        Génère EXACTEMENT ces 3 parties en français :
+        Génère une analyse EXTRÊMEMENT PRÉCISE, FACTUELLE et SANS AUCUNE HALLUCINATION.
+        Structure ta réponse EXACTEMENT avec ces 3 parties :
+
         ### 1. 📊 Tableau Synthétique des Tâches
+        Dresse un tableau Markdown concis récapitulant les tâches (Étape, Processus, Type de Tâche).
+
         ### 2. 📝 Description Logique du Processus
-        ### 3. 🔵 Propositions d'Intégration SAP Business One 10.0 (Format liste à puces)
+        Rédige une description chronologique, professionnelle et concise du flux.
+
+        ### 3. 🔵 Propositions d'Intégration SAP Business One 10.0
+        RÈGLES STRICTES ANTI-HALLUCINATION POUR CETTE SECTION :
+        - Règle 1 : Limite-toi STRICTEMENT au standard de SAP Business One 10.0. Interdiction absolue d'inventer des menus, ou de citer des fonctions SAP ECC ou SAP S/4HANA.
+        - Règle 2 : Ne propose une intégration SAP QUE pour les tâches administratives, logistiques informatisées ou de gestion (Achats, Ventes, Production, Stocks). Ignore complètement les tâches 100% physiques ou manuelles (ex: "couper le tissu", "mesurer", "déplacer physiquement").
+        - Règle 3 : Si une tâche pertinente n'a pas d'écran standard exact, précise "Nécessite un UDF (Champ Utilisateur)" ou "Développement spécifique". Ne mens jamais sur le standard.
+
+        Pour chaque tâche pertinente à intégrer, utilise ce format exact à puces :
+        * **[Nom exact de la tâche]**
+          * **Module :** [Ex: Ventes - Client / Production / Stocks]
+          * **Écran cible :** [Ex: Commande client / Ordre de fabrication / Entrée de marchandises]
+          * **Proposition :** [Explication technique très précise de l'action à réaliser dans SAP B1]
         """
-        response = model.generate_content(prompt, generation_config={"temperature": 0.1})
+        response = model.generate_content(prompt, generation_config={"temperature": 0.0}) # Température à 0.0 pour une précision mathématique
         return response.text
 
     def generate_single_pillar(tasks_text, pillar_name):
@@ -231,17 +247,17 @@ if check_password():
             # =========================================================
             # SECTION 1 : SAP & MÉTIER (BOUTON 2)
             # =========================================================
-            st.subheader("Étape 1 : Analyse Métier & SAP B1")
+            st.subheader("Étape 1 : Analyse Métier & Architecture SAP B1")
             if not st.session_state.step1_text:
-                if st.button("📝 Générer l'Analyse Métier et SAP", type="primary"):
-                    with st.spinner("Analyse en cours..."):
+                if st.button("📝 Générer l'Analyse Métier et SAP (Précision Max)", type="primary"):
+                    with st.spinner("Analyse approfondie du standard SAP en cours..."):
                         try:
                             st.session_state.step1_text = generate_part1_analysis(st.session_state.bpmn_tasks_only, st.session_state.bpmn_context)
                             st.rerun()
                         except Exception as e: st.error(f"Erreur : {e}")
             else:
-                st.success("✅ Analyse SAP terminée.")
-                with st.expander("Voir le Tableau et l'Intégration SAP", expanded=True):
+                st.success("✅ Analyse SAP générée avec succès.")
+                with st.expander("Voir l'Intégration SAP B1 Détaillée", expanded=True):
                     st.markdown(st.session_state.step1_text)
 
             st.divider()
@@ -267,7 +283,7 @@ if check_password():
                     else:
                         st.success(f"✅ {name} terminé")
 
-            # Affichage des tableaux générés (dans des menus déroulants pour ne pas polluer l'écran)
+            # Affichage des tableaux générés
             for num, name in PILIERS.items():
                 if st.session_state.pillar_scores[num]:
                     with st.expander(f"📊 Voir le tableau : {name}", expanded=False):
@@ -324,8 +340,8 @@ if check_password():
 
                 chat_context = f"""
                 Tu es un consultant expert SAP Business One 10.0. L'utilisateur te pose une question sur son processus métier.
-                RÈGLE 1 : Réponses applicables STRICTEMENT ET UNIQUEMENT à SAP Business One 10.0. 
-                RÈGLE 2 : Si tu n'es pas certain, dis 'Cette fonction n'existe pas en standard'.
+                RÈGLE 1 : Réponses applicables STRICTEMENT ET UNIQUEMENT à SAP Business One 10.0. Ne mentionne pas S/4HANA ou ECC.
+                RÈGLE 2 : Si tu n'es pas certain, dis 'Cette fonction n'existe pas en standard'. N'invente jamais de chemins.
                 Voici les données du processus actuel : {st.session_state.bpmn_context}
                 Question : {user_prompt}
                 """
@@ -333,7 +349,7 @@ if check_password():
                     with st.spinner("Réflexion..."):
                         try:
                             model = genai.GenerativeModel(get_best_model())
-                            response = model.generate_content(chat_context, generation_config={"temperature": 0.1})
+                            response = model.generate_content(chat_context, generation_config={"temperature": 0.0}) # Température à 0.0 ici aussi pour la rigueur
                             st.markdown(response.text)
                             st.session_state.chat_history.append({"role": "assistant", "content": response.text})
                         except Exception as e:
