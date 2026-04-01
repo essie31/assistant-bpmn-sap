@@ -6,11 +6,11 @@ import pandas as pd
 import json
 import re
 
-# --- Configuration de la page (Doit TOUJOURS être la première commande) ---
+# --- Configuration de la page ---
 st.set_page_config(page_title="Assistant BPMN & SAP B1", page_icon="🏭", layout="wide")
 
 # ==========================================
-# 🖨️ CSS POUR IMPRESSION PROPRE (CTRL+P) MULTI-PAGES
+# 🖨️ CSS POUR IMPRESSION PROPRE (CTRL+P)
 # ==========================================
 st.markdown("""
 <style>
@@ -146,9 +146,10 @@ if check_password():
           * **Chemin de navigation :** [Chemin]
           * **Proposition d'automatisation :** [Détail]
         """
+        # Utilisation d'un dictionnaire simple pour la config pour éviter les bugs
         response = model.generate_content(
             prompt,
-            generation_config=genai.types.GenerationConfig(temperature=0.1)
+            generation_config={"temperature": 0.1}
         )
         return response.text
 
@@ -187,7 +188,7 @@ if check_password():
         """
         response = model.generate_content(
             prompt,
-            generation_config=genai.types.GenerationConfig(temperature=0.1)
+            generation_config={"temperature": 0.1, "max_output_tokens": 8192}
         )
         return response.text
 
@@ -229,15 +230,14 @@ if check_password():
         uploaded_file = st.file_uploader("Importez votre fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
-            # Réinitialisation si l'utilisateur veut recommencer
+            # Réinitialisation
             if st.button("🔄 Réinitialiser l'analyse pour un nouveau fichier"):
                 st.session_state.part1_done = False
                 st.session_state.part2_done = False
                 st.session_state.part1_text = ""
                 st.session_state.part2_text = ""
-                st.rerun()
 
-            # BOUTON 1 : ANALYSE MÉTIER & SAP
+            # --- BOUTON 1 ---
             if not st.session_state.part1_done:
                 if st.button("1️⃣ Générer l'Analyse Métier & Intégration SAP", type="primary"):
                     with st.spinner("Analyse métier et SAP en cours... (Étape 1/2)"):
@@ -249,21 +249,19 @@ if check_password():
                             try:
                                 st.session_state.part1_text = generate_part1_analysis(tasks_text, flows_text)
                                 st.session_state.part1_done = True
-                                st.rerun()
                             except Exception as e:
                                 st.error(f"🔴 Erreur IA (Étape 1) : {e}")
 
-            # AFFICHAGE DE LA PARTIE 1
+            # --- AFFICHAGE PARTIE 1 ---
             if st.session_state.part1_done:
                 st.success("✅ Étape 1 terminée ! Voici l'analyse métier et SAP.")
                 st.markdown(st.session_state.part1_text)
                 st.divider()
 
-                # BOUTON 2 : SCORES & RADAR (N'apparait qu'après l'étape 1)
+                # --- BOUTON 2 ---
                 if not st.session_state.part2_done:
                     if st.button("2️⃣ Générer la Matrice Industrie 4.0 & le Radar", type="primary"):
                         with st.spinner("Création de la Matrice I4.0 et du Radar... (Étape 2/2)"):
-                            # On récupère les textes du contexte sauvegardé
                             context_parts = st.session_state.bpmn_context.split("\n\nFLUX:\n")
                             tasks_text = context_parts[0].replace("TÂCHES:\n", "")
                             flows_text = context_parts[1] if len(context_parts) > 1 else ""
@@ -271,11 +269,10 @@ if check_password():
                             try:
                                 st.session_state.part2_text = generate_part2_evaluation(tasks_text, flows_text)
                                 st.session_state.part2_done = True
-                                st.rerun()
                             except Exception as e:
                                 st.error(f"🔴 Erreur IA (Étape 2) : {e}")
 
-                # AFFICHAGE DE LA PARTIE 2 (Radar)
+                # --- AFFICHAGE PARTIE 2 ---
                 if st.session_state.part2_done:
                     st.success("✅ Étape 2 terminée ! Vous pouvez maintenant imprimer (Ctrl+P).")
                     
@@ -283,7 +280,7 @@ if check_password():
                     json_match = re.search(r'```json\n(.*?)\n```', report_part2, re.DOTALL)
                     clean_report_part2 = re.sub(r'### 5\. SCORES_JSON.*', '', report_part2, flags=re.DOTALL)
                     
-                    # Affichage pleine largeur de la Matrice (pour que les 11 colonnes respirent)
+                    # Affichage pleine largeur de la Matrice
                     st.markdown(clean_report_part2)
                     st.divider()
                     
@@ -305,7 +302,7 @@ if check_password():
                             if fig:
                                 st.plotly_chart(fig, use_container_width=True)
                     else:
-                        st.warning("Le graphique radar n'a pas pu être généré. Le format JSON n'a pas été trouvé.")
+                        st.warning("Le graphique radar n'a pas pu être généré. (Erreur format JSON)")
 
     with tab2:
         st.header("Discutez avec votre Consultant SAP B1")
@@ -342,7 +339,7 @@ if check_password():
                             model = genai.GenerativeModel(model_name)
                             response = model.generate_content(
                                 chat_context,
-                                generation_config=genai.types.GenerationConfig(temperature=0.1)
+                                generation_config={"temperature": 0.1}
                             )
                             st.markdown(response.text)
                             st.session_state.chat_history.append({"role": "assistant", "content": response.text})
