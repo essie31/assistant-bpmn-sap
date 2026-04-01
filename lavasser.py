@@ -1,6 +1,7 @@
 import streamlit as st
 import xml.etree.ElementTree as ET
-import google.generativeai as genai
+from google import genai           # <-- LA NOUVELLE BIBLIOTHÈQUE QUI MARCHE
+from google.genai import types     # <-- POUR GÉRER LA TEMPÉRATURE
 import plotly.express as px
 import pandas as pd
 import json
@@ -15,18 +16,15 @@ st.set_page_config(page_title="Assistant BPMN & SAP B1", page_icon="🏭", layou
 st.markdown("""
 <style>
 @media print {
-    /* Forcer Streamlit à dérouler toute la page pour l'impression (Corrige le bug de la page unique) */
     body, html, .stApp, .main, section, div.block-container {
         height: auto !important;
         overflow: visible !important;
         display: block !important;
         position: relative !important;
     }
-    /* Masquer les éléments interactifs */
     header, footer, [data-testid="stSidebar"], .stButton, .stFileUploader, .stTextInput {
         display: none !important;
     }
-    /* Garder les couleurs du radar et empêcher les tableaux d'être coupés au milieu */
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     table { page-break-inside: auto; width: 100% !important; font-size: 11px; }
     tr { page-break-inside: avoid; page-break-after: auto; }
@@ -38,11 +36,9 @@ st.markdown("""
 # ==========================================
 # 🔒 SYSTÈME DE SÉCURITÉ (LOGIN)
 # ==========================================
-# Sécurité : On récupère le mot de passe depuis les secrets
-CODE_SECRET = st.secrets["APP_PASSWORD"]
+CODE_SECRET = st.secrets["APP_PASSWORD"] 
 
 def check_password():
-    """Retourne True si l'utilisateur a entré le bon code."""
     def password_entered():
         if st.session_state["password"] == CODE_SECRET:
             st.session_state["password_correct"] = True
@@ -66,12 +62,14 @@ def check_password():
 if check_password():
     
     # ==========================================
-    # 🔑 CLÉ API (Sécurisée)
+    # 🔑 CLÉ API ET NOUVEAU CLIENT GOOGLE
     # ==========================================
-    API_KEY = st.secrets["API_KEY"]
+    API_KEY = st.secrets["API_KEY"] 
+    client = genai.Client(api_key=API_KEY)
+    
+    MODEL_NAME = 'gemini-2.5-flash' # <-- LE MODÈLE QUI MARCHE POUR VOUS
 
     def parse_bpmn_from_file(file_object):
-        """Extrait les éléments et les flux localement."""
         try:
             tree = ET.parse(file_object)
             root = tree.getroot()
@@ -112,7 +110,171 @@ if check_password():
                 
         return "\n".join(tasks_list), "\n".join(flows)
 
-    def get_best_model():
-        """Trouve le meilleur modèle disponible."""
-        genai.configure(api_key=API_KEY)
-        valid_model_name
+    def generate_full_analysis(tasks_text, flows_text):
+        prompt = f"""
+        Tu es un assistant expert combinant trois rôles : Analyste BPMN, Expert Industrie 4.0, et Consultant SAP B1 10.0.
+        Voici les données du BPMN :
+        
+        TÂCHES :
+        {tasks_text}
+        
+        SÉQUENCE :
+        {flows_text}
+
+        Génère un rapport structuré en français avec EXACTEMENT ces parties :
+
+        ### 1. 📊 Tableau Synthétique des Tâches
+        Génère un tableau Markdown avec les colonnes : Étape, Processus, Type de Tâche.
+
+        ### 2. 📝 Description Logique du Processus
+        Explication claire et chronologique.
+
+        ### 3. 🔵 Propositions d'Intégration SAP Business One 10.0
+        Rédige IMPÉRATIVEMENT sous forme de LISTE (PAS DE TABLEAU). Structure à puces :
+        * **Tâche BPMN :** [Nom]
+          * **Module SAP B1 :** [Module]
+          * **Écran cible :** [Écran]
+          * **Chemin de navigation :** [Chemin]
+          * **Proposition d'automatisation :** [Détail]
+
+        ### 4. 🏭 Matrice d'Évaluation Industrie 4.0 (Les 9 Piliers)
+        Génère UN SEUL grand tableau Markdown évaluant TOUTES les tâches listées au début du prompt, sans AUCUNE exception.
+        Colonnes du tableau : `Tâche` | `Big Data` | `Robots` | `Simul.` | `Intégr.` | `IIoT` | `Cyber.` | `Cloud` | `Additif` | `RA` | `Justification`.
+        CONTRAINTE VITALE POUR NE PAS COUPER LA RÉPONSE : Pour chaque tâche (ligne), attribue un score de 1 à 5 sous chaque pilier. La colonne `Justification` doit obligatoirement faire 3 MOTS MAXIMUM en style télégraphique (ex: "Fort potentiel", "Non pertinent", "Automatisation clé").
+
+        ### 5. SCORES_JSON
+        À la toute fin, inclut un bloc JSON valide avec la note globale moyenne de 1 à 5 du processus entier pour les 9 piliers. Il ne doit y avoir aucun texte après ce bloc.
+        ```json
+        {{
+          "Big Data": 2,
+          "Robots Autonomes": 1,
+          "Simulation": 1,
+          "Intégration Systèmes": 3,
+          "IIoT": 2,
+          "Cybersécurité": 4,
+          "Cloud": 3,
+          "Fabrication Additive": 1,
+          "Réalité Augmentée": 1
+        }}
+        ```
+        """
+        try:
+            # APPEL DE LA NOUVELLE API
+            response = client.models.generate_content(
+                model=MODEL_NAME,
+                contents=prompt,
+                config=types.GenerateContentConfig(
+                    temperature=0.1,
+                    max_output_tokens=8192
+                )
+            )
+            return response.text
+        except Exception as e:
+            return f"ERREUR_API_GOOGLE||| Impossible de joindre l'IA de Google. Détail : {str(e)}"
+
+    def draw_radar_chart(json_str):
+        try:
+            scores = json.loads(json_str)
+            df = pd.DataFrame(dict(
+                r=list(scores.values()),
+                theta=list(scores.keys())
+            ))
+            fig = px.line_polar(df, r='r', theta='theta', line_close=True, range_r=[0,5], 
+                                title="Indice de Maturité I4.0 (9 Piliers)",
+                                markers=True)
+            fig.update_traces(fill='toself', line_color='#ff7f0e') 
+            return fig
+        except Exception as e:
+            return None
+
+    # --- INITIALISATION DE LA MÉMOIRE DU CHAT ---
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+    if "bpmn_context" not in st.session_state:
+        st.session_state.bpmn_context = ""
+
+    st.title("💡 Hub d'Intégration : BPMN ➔ SAP Business One 10.0")
+
+    tab1, tab2 = st.tabs(["📊 Évaluation & Radar", "💬 Assistant Configuration SAP"])
+
+    with tab1:
+        st.write("Importez votre processus. 🖨️ *Astuce : Faites Ctrl+P pour imprimer un rapport propre une fois généré.*")
+        uploaded_file = st.file_uploader("Importez votre fichier .bpmn ou .xml", type=['bpmn', 'xml'])
+
+        if uploaded_file is not None:
+            if st.button("Lancer l'évaluation complète", type="primary"):
+                with st.spinner("Analyse et génération de la Matrice I4.0 en cours avec Gemini 2.5 Flash..."):
+                    tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
+                    
+                    if tasks_text is None:
+                        st.error(flows_text)
+                    else:
+                        st.session_state.bpmn_context = f"TÂCHES:\n{tasks_text}\n\nFLUX:\n{flows_text}"
+                        report = generate_full_analysis(tasks_text, flows_text)
+                        
+                        if report.startswith("ERREUR_API_GOOGLE|||"):
+                            st.error(f"🔴 {report}")
+                        else:
+                            json_match = re.search(r'```json\n(.*?)\n```', report, re.DOTALL)
+                            clean_report = re.sub(r'### 5\. SCORES_JSON.*', '', report, flags=re.DOTALL)
+                            
+                            st.success("Analyse générée ! Vous pouvez imprimer cette page (Ctrl+P) ou (Cmd+P sur Mac).")
+                            
+                            st.markdown(clean_report)
+                            st.divider()
+                            
+                            if json_match:
+                                json_data = json_match.group(1)
+                                st.subheader("📊 Scores Globaux (9 Piliers)")
+                                
+                                col_vide1, col_centre, col_vide2 = st.columns([1, 2, 1])
+                                with col_centre:
+                                    fig = draw_radar_chart(json_data)
+                                    if fig:
+                                        st.plotly_chart(fig, use_container_width=True)
+                            else:
+                                st.warning("Le graphique radar n'a pas pu être généré (Rapport coupé avant la fin).")
+
+    with tab2:
+        st.header("Discutez avec votre Consultant SAP B1")
+        
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        if user_prompt := st.chat_input("Posez votre question sur SAP B1..."):
+            if not st.session_state.bpmn_context:
+                st.warning("Veuillez d'abord analyser un fichier BPMN dans l'onglet 'Évaluation & Radar'.")
+            else:
+                with st.chat_message("user"):
+                    st.markdown(user_prompt)
+                st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+
+                chat_context = f"""
+                Tu es un consultant expert SAP Business One 10.0. L'utilisateur te pose une question sur son processus métier.
+                
+                RÈGLE N°1 : Tes réponses doivent s'appliquer STRICTEMENT ET UNIQUEMENT à SAP Business One 10.0. Ne donne jamais de chemins de menus provenant de SAP S/4HANA ou SAP ECC.
+                RÈGLE N°2 : Si tu n'es pas absolument certain du chemin exact du menu dans SAP B1, ou si la fonctionnalité n'existe pas en standard, TU DOIS dire 'Je ne suis pas certain' ou 'Cette fonction n'existe pas en standard'.
+                
+                Voici les données de son processus actuel :
+                {st.session_state.bpmn_context}
+                
+                Réponds de manière technique et directement applicable dans SAP B1 10.0.
+                Question : {user_prompt}
+                """
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Réflexion..."):
+                        try:
+                            # APPEL DE LA NOUVELLE API POUR LE CHAT
+                            response = client.models.generate_content(
+                                model=MODEL_NAME,
+                                contents=chat_context,
+                                config=types.GenerateContentConfig(
+                                    temperature=0.1
+                                )
+                            )
+                            st.markdown(response.text)
+                            st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                        except Exception as e:
+                            st.error(f"🔴 Impossible de joindre Google pour le chat : {str(e)}")
