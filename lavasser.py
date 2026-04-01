@@ -21,10 +21,9 @@ st.markdown("""
         display: block !important;
         position: relative !important;
     }
-    header, footer, [data-testid="stSidebar"], .stButton, .stFileUploader, .stTextInput, .stExpander {
+    header, footer, [data-testid="stSidebar"], .stButton, .stFileUploader, .stTextInput {
         display: none !important;
     }
-    .streamlit-expanderContent { display: block !important; }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     table { page-break-inside: auto; width: 100% !important; font-size: 11px; }
     tr { page-break-inside: avoid; page-break-after: auto; }
@@ -103,21 +102,8 @@ if check_password():
                 elements[elem_id] = {'name': elem_name, 'type': elem_type, 'lane': lane_name}
                 if elem_name != 'Sans nom':
                     tasks_list.append(f"- Étape: {lane_name} | Processus: {elem_name} | Type: {elem_type}")
-
-        flows = []
-        for flow in root.findall('.//bpmn:sequenceFlow', ns):
-            source = flow.get('sourceRef')
-            target = flow.get('targetRef')
-            condition = flow.get('name', '') 
-            if source in elements and target in elements:
-                s_elem = elements[source]
-                t_elem = elements[target]
-                flow_desc = f"De [{s_elem['lane']}] '{s_elem['name']}' ({s_elem['type']}) -> Vers [{t_elem['lane']}] '{t_elem['name']}' ({t_elem['type']})"
-                if condition:
-                    flow_desc += f" [Condition: {condition}]"
-                flows.append(flow_desc)
                 
-        return "\n".join(tasks_list), "\n".join(flows)
+        return "\n".join(tasks_list)
 
     def get_best_model():
         valid_model_name = 'gemini-pro' 
@@ -134,13 +120,12 @@ if check_password():
     # 🤖 FONCTIONS DE GÉNÉRATION SÉPARÉES
     # ==========================================
 
-    def generate_part1_analysis(tasks_text, flows_text):
+    def generate_part1_analysis(tasks_text):
         model = genai.GenerativeModel(get_best_model())
         prompt = f"""
         Tu es un Consultant Expert SAP Business One 10.0 et un Analyste BPMN Senior.
         Voici les données du processus métier :
         TÂCHES : {tasks_text}
-        SÉQUENCE : {flows_text}
 
         Génère une analyse EXTRÊMEMENT PRÉCISE, FACTUELLE et SANS AUCUNE HALLUCINATION.
         Structure ta réponse EXACTEMENT avec ces 3 parties :
@@ -153,17 +138,17 @@ if check_password():
 
         ### 3. 🔵 Propositions d'Intégration SAP Business One 10.0
         RÈGLES STRICTES ANTI-HALLUCINATION POUR CETTE SECTION :
-        - Règle 1 : Limite-toi STRICTEMENT au standard de SAP Business One 10.0. Interdiction absolue d'inventer des menus, ou de citer des fonctions SAP ECC ou SAP S/4HANA.
-        - Règle 2 : Ne propose une intégration SAP QUE pour les tâches administratives, logistiques informatisées ou de gestion (Achats, Ventes, Production, Stocks). Ignore complètement les tâches 100% physiques ou manuelles (ex: "couper le tissu", "mesurer", "déplacer physiquement").
-        - Règle 3 : Si une tâche pertinente n'a pas d'écran standard exact, précise "Nécessite un UDF (Champ Utilisateur)" ou "Développement spécifique". Ne mens jamais sur le standard.
+        - Règle 1 : Limite-toi STRICTEMENT au standard de SAP Business One 10.0. Interdiction absolue d'inventer des menus.
+        - Règle 2 : Ne propose une intégration SAP QUE pour les tâches administratives ou informatisées. Ignore les tâches 100% physiques.
+        - Règle 3 : Si une tâche pertinente n'a pas d'écran standard exact, précise "Nécessite un UDF". Ne mens jamais sur le standard.
 
-        Pour chaque tâche pertinente à intégrer, utilise ce format exact à puces :
+        Format exact à puces :
         * **[Nom exact de la tâche]**
-          * **Module :** [Ex: Ventes - Client / Production / Stocks]
-          * **Écran cible :** [Ex: Commande client / Ordre de fabrication / Entrée de marchandises]
-          * **Proposition :** [Explication technique très précise de l'action à réaliser dans SAP B1]
+          * **Module :** [Ex: Ventes]
+          * **Écran cible :** [Ex: Commande client]
+          * **Proposition :** [Explication technique très précise]
         """
-        response = model.generate_content(prompt, generation_config={"temperature": 0.0}) # Température à 0.0 pour une précision mathématique
+        response = model.generate_content(prompt, generation_config={"temperature": 0.0})
         return response.text
 
     def generate_single_pillar(tasks_text, pillar_name):
@@ -209,7 +194,6 @@ if check_password():
     # 💾 INITIALISATION DE LA MÉMOIRE (SESSION)
     # ==========================================
     if "chat_history" not in st.session_state: st.session_state.chat_history = []
-    if "bpmn_context" not in st.session_state: st.session_state.bpmn_context = ""
     if "bpmn_tasks_only" not in st.session_state: st.session_state.bpmn_tasks_only = ""
     
     if "step1_text" not in st.session_state: st.session_state.step1_text = ""
@@ -223,17 +207,15 @@ if check_password():
     tab1, tab2 = st.tabs(["📊 Évaluation à la Carte", "💬 Assistant SAP"])
 
     with tab1:
-        st.write("Importez votre processus. Générez chaque partie indépendamment pour une stabilité totale à 100%.")
+        st.write("Importez votre processus. 🖨️ *Astuce : Faites Ctrl+P pour imprimer un rapport propre.*")
         uploaded_file = st.file_uploader("Importez votre fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
             # Extraction
-            if not st.session_state.bpmn_context:
-                tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
-                if tasks_text is None: st.error(flows_text)
-                else:
-                    st.session_state.bpmn_context = f"TÂCHES:\n{tasks_text}\n\nFLUX:\n{flows_text}"
-                    st.session_state.bpmn_tasks_only = tasks_text
+            if not st.session_state.bpmn_tasks_only:
+                tasks_text = parse_bpmn_from_file(uploaded_file)
+                if tasks_text is None: st.error("Erreur de lecture du fichier.")
+                else: st.session_state.bpmn_tasks_only = tasks_text
 
             # BOUTON 1 : RESET
             if st.button("🔄 Réinitialiser complètement", type="secondary"):
@@ -245,28 +227,27 @@ if check_password():
             st.divider()
             
             # =========================================================
-            # SECTION 1 : SAP & MÉTIER (BOUTON 2)
+            # SECTION 1 : SAP & MÉTIER 
             # =========================================================
             st.subheader("Étape 1 : Analyse Métier & Architecture SAP B1")
             if not st.session_state.step1_text:
-                if st.button("📝 Générer l'Analyse Métier et SAP (Précision Max)", type="primary"):
+                if st.button("📝 Générer l'Analyse Métier et SAP", type="primary"):
                     with st.spinner("Analyse approfondie du standard SAP en cours..."):
                         try:
-                            st.session_state.step1_text = generate_part1_analysis(st.session_state.bpmn_tasks_only, st.session_state.bpmn_context)
+                            st.session_state.step1_text = generate_part1_analysis(st.session_state.bpmn_tasks_only)
                             st.rerun()
                         except Exception as e: st.error(f"Erreur : {e}")
             else:
                 st.success("✅ Analyse SAP générée avec succès.")
-                with st.expander("Voir l'Intégration SAP B1 Détaillée", expanded=True):
-                    st.markdown(st.session_state.step1_text)
+                st.markdown(st.session_state.step1_text)
 
             st.divider()
 
             # =========================================================
-            # SECTION 2 : LES 9 PILIERS I4.0 (BOUTONS 3 À 11)
+            # SECTION 2 : LES 9 PILIERS I4.0 
             # =========================================================
             st.subheader("Étape 2 : Évaluation des 9 Piliers (Industrie 4.0)")
-            st.write("Générez les tableaux un par un. L'IA ne plantera jamais avec cette méthode.")
+            st.write("Générez les tableaux un par un pour ne pas surcharger la mémoire de l'IA (Environ 15 sec par tableau).")
             
             # Grille de 3 colonnes pour les 9 boutons
             cols = st.columns(3)
@@ -275,24 +256,25 @@ if check_password():
                 with col:
                     if not st.session_state.pillar_scores[num]:
                         if st.button(f"⚙️ Générer : {name}", key=f"btn_{num}", use_container_width=True):
-                            with st.spinner(f"Évaluation {name}..."):
+                            with st.spinner(f"Génération du tableau pour {name} (Patientez)..."):
                                 try:
                                     st.session_state.pillar_scores[num] = generate_single_pillar(st.session_state.bpmn_tasks_only, name)
                                     st.rerun()
                                 except Exception as e: st.error(f"Erreur : {e}")
                     else:
-                        st.success(f"✅ {name} terminé")
+                        st.success(f"✅ {name} généré")
 
-            # Affichage des tableaux générés
+            # Affichage direct et visible des tableaux générés (SANS MENU DÉROULANT CACHÉ)
             for num, name in PILIERS.items():
                 if st.session_state.pillar_scores[num]:
-                    with st.expander(f"📊 Voir le tableau : {name}", expanded=False):
-                        st.markdown(st.session_state.pillar_scores[num])
+                    st.markdown(f"### 📊 Score : {name}")
+                    st.markdown(st.session_state.pillar_scores[num])
+                    st.write("---")
 
             st.divider()
 
             # =========================================================
-            # SECTION 3 : RÉSULTATS & RADAR (BOUTON 12)
+            # SECTION 3 : RÉSULTATS & RADAR 
             # =========================================================
             st.subheader("Étape 3 : Synthèse & Graphique Radar")
             if not st.session_state.step3_text:
@@ -332,7 +314,7 @@ if check_password():
                 st.markdown(message["content"])
 
         if user_prompt := st.chat_input("Posez votre question sur SAP B1..."):
-            if not st.session_state.bpmn_context:
+            if not st.session_state.bpmn_tasks_only:
                 st.warning("Veuillez d'abord importer un fichier dans le premier onglet.")
             else:
                 with st.chat_message("user"): st.markdown(user_prompt)
@@ -342,14 +324,14 @@ if check_password():
                 Tu es un consultant expert SAP Business One 10.0. L'utilisateur te pose une question sur son processus métier.
                 RÈGLE 1 : Réponses applicables STRICTEMENT ET UNIQUEMENT à SAP Business One 10.0. Ne mentionne pas S/4HANA ou ECC.
                 RÈGLE 2 : Si tu n'es pas certain, dis 'Cette fonction n'existe pas en standard'. N'invente jamais de chemins.
-                Voici les données du processus actuel : {st.session_state.bpmn_context}
+                Voici les données du processus actuel : {st.session_state.bpmn_tasks_only}
                 Question : {user_prompt}
                 """
                 with st.chat_message("assistant"):
                     with st.spinner("Réflexion..."):
                         try:
                             model = genai.GenerativeModel(get_best_model())
-                            response = model.generate_content(chat_context, generation_config={"temperature": 0.0}) # Température à 0.0 ici aussi pour la rigueur
+                            response = model.generate_content(chat_context, generation_config={"temperature": 0.0})
                             st.markdown(response.text)
                             st.session_state.chat_history.append({"role": "assistant", "content": response.text})
                         except Exception as e:
