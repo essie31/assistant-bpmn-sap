@@ -59,8 +59,17 @@ if check_password():
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=GROQ_API_KEY)
     
-    # Modèle le plus intelligent de Groq (équivalent GPT-4) pour des réponses longues et sans erreurs
-    MODEL_NAME = "gemma2-9b-it"
+    # --- AUTO-DÉTECTION DU MODÈLE GROQ ---
+    try:
+        # Demande à Groq la liste des modèles actifs aujourd'hui
+        modeles_actifs = [m.id for m in client.models.list().data]
+        
+        # Choisit automatiquement un modèle Llama rapide (et évite le 70b dont le quota est épuisé)
+        MODEL_NAME = next((m for m in modeles_actifs if "llama" in m.lower() and "70b" not in m.lower()), modeles_actifs[0])
+        
+    except Exception as e:
+        MODEL_NAME = "llama-3.1-8b-instant" # Sécurité ultime
+    # -------------------------------------
 
     def parse_bpmn_from_file(file_object):
         """Extrait uniquement les tâches pour ne pas saturer le quota Groq."""
