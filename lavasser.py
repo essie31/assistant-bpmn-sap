@@ -2,16 +2,13 @@ import streamlit as st
 import xml.etree.ElementTree as ET
 from google import genai
 from google.genai import types 
-import plotly.express as px
 import pandas as pd
-import json
-import re
 
 # --- Configuration de la page ---
-st.set_page_config(page_title="Hub BPMN ➔ SAP (Analyse)", page_icon="📊", layout="wide")
+st.set_page_config(page_title="App 1 : Analyse & Architecture SAP", page_icon="📊", layout="wide")
 
 # ==========================================
-# 🖨️ CSS POUR IMPRESSION
+# 🖨️ CSS POUR IMPRESSION (CTRL+P)
 # ==========================================
 st.markdown("""
 <style>
@@ -19,52 +16,46 @@ st.markdown("""
     body, html, .stApp, .main, section, div.block-container { height: auto !important; overflow: visible !important; display: block !important; position: relative !important; }
     header, footer, [data-testid="stSidebar"], .stButton, .stFileUploader, .stTextInput { display: none !important; }
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    table { page-break-inside: auto; width: 100% !important; }
+    table { page-break-inside: auto; width: 100% !important; font-size: 12px; }
     tr { page-break-inside: avoid; page-break-after: auto; }
 }
 </style>
 """, unsafe_allow_html=True)
 
 # ==========================================
-# 🔒 SÉCURITÉ
+# 🔒 SYSTÈME DE SÉCURITÉ
 # ==========================================
 CODE_SECRET = st.secrets["APP_PASSWORD"] 
 
 def check_password():
-    def password_entered():
-        if st.session_state["password"] == CODE_SECRET:
-            st.session_state["password_correct"] = True
-            del st.session_state["password"]  
-        else:
-            st.session_state["password_correct"] = False
     if "password_correct" not in st.session_state:
         st.title("🔒 Accès Restreint")
-        st.text_input("Code d'accès :", type="password", on_change=password_entered, key="password")
-        return False
-    elif not st.session_state["password_correct"]:
-        st.title("🔒 Accès Restreint")
-        st.text_input("Code d'accès :", type="password", on_change=password_entered, key="password")
-        st.error("😕 Code d'accès incorrect.")
+        pwd = st.text_input("Veuillez entrer le code d'accès :", type="password")
+        if st.button("Valider"):
+            if pwd == CODE_SECRET:
+                st.session_state["password_correct"] = True
+                st.rerun()
+            else: st.error("😕 Code d'accès incorrect.")
         return False
     return True
 
 if check_password():
     
-    # --- LIEN VERS L'APP 2 DANS LA SIDEBAR ---
+    # --- BARRE LATÉRALE DE NAVIGATION ---
     with st.sidebar:
         st.title("🚀 Navigation")
-        st.info("Besoin d'aide pour la configuration ?")
-        # Remplacez par votre vrai lien une fois l'App 2 déployée
-        st.link_button("💬 Aller à l'Assistant Chat SAP", "https://votre-deuxieme-app.streamlit.app")
+        st.info("Besoin d'aide pour configurer SAP ?")
+        # Remplacez par le lien de votre App 2 (Assistant Chat)
+        st.link_button("💬 Assistant de Configuration (App 2)", "https://votre-app-chat.streamlit.app")
         st.divider()
-        st.write("Modèle : Gemini 2.5 Flash")
+        st.write("Modèle : Gemini 1.5 Pro")
 
     # ==========================================
-    # 🔑 CONFIGURATION GOOGLE
+    # 🔑 CONFIGURATION GOOGLE GEMINI
     # ==========================================
     API_KEY = st.secrets["API_KEY"] 
     client = genai.Client(api_key=API_KEY)
-    MODEL_NAME = 'gemini-2.5-flash'
+    MODEL_NAME = 'gemini-1.5-pro'
 
     def parse_bpmn_from_file(file_object):
         try:
@@ -75,52 +66,47 @@ if check_password():
                         for lane in root.findall('.//bpmn:lane', ns) 
                         for node_ref in lane.findall('bpmn:flowNodeRef', ns)}
             
-            tasks = []
-            flows = []
-            elements = {}
+            tasks, flows, elements = [], [], {}
 
             for elem in root.findall('.//bpmn:process/*', ns):
                 if 'id' in elem.attrib and 'sequenceFlow' not in elem.tag:
                     e_id, e_name = elem.get('id'), elem.get('name', 'Sans nom').strip()
-                    e_type = elem.tag.split('}')[-1]
                     lane = lane_map.get(e_id, 'Général')
                     elements[e_id] = {'name': e_name, 'lane': lane}
                     if e_name != 'Sans nom':
-                        tasks.append(f"- [{lane}] {e_name} ({e_type})")
+                        tasks.append(f"- [{lane}] {e_name}")
 
             for flow in root.findall('.//bpmn:sequenceFlow', ns):
                 src, tgt = flow.get('sourceRef'), flow.get('targetRef')
                 if src in elements and tgt in elements:
-                    flows.append(f"De '{elements[src]['name']}' vers '{elements[tgt]['name']}'")
+                    flows.append(f"'{elements[src]['name']}' ➔ '{elements[tgt]['name']}'")
 
             return "\n".join(tasks), "\n".join(flows)
         except: return None, None
 
-    def generate_full_analysis(tasks_text, flows_text):
+    def generate_detailed_analysis(tasks, flows):
         prompt = f"""
-        Tu es un Architecte SAP Senior et Expert Industrie 4.0. Analyse ce processus :
+        Tu es un Architecte Senior SAP Business One 10.0. Analyse ce processus industriel :
         
-        TÂCHES : {tasks_text}
-        FLUX : {flows_text}
+        TÂCHES : {tasks}
+        FLUX : {flows}
 
-        Génère un rapport de haute qualité avec :
+        Génère un rapport d'architecture technique exhaustif :
 
-        ### 1. 📊 Architecture & Intégration SAP B1 10.0 (Ultra-Détaillé)
-        Pour chaque tâche informatisable, fournis :
+        ### 1. 📊 Tableau des Tâches & Rôles
+        Dresse un tableau Markdown (Département | Tâche BPMN).
+
+        ### 2. 📝 Analyse Logique & Métier
+        Analyse approfondie (minimum 4 paragraphes). Explique la circulation des flux, les points critiques de contrôle qualité et la logique de production de bout en bout.
+
+        ### 3. 🔵 Intégration & Architecture SAP B1 10.0 (Ultra-Détaillé)
+        Pour chaque tâche informatisable, fournis une documentation d'implémentation senior :
         * **Tâche :** [Nom]
-        * **Module & Objet SAP :** [Ex: Production - OWOR]
-        * **Action Technique :** [Description précise des champs et de l'impact transactionnel (OIGN/OIGE)]
-        * **Impact Stock/Compta :** [Impact sur les tables OITW et OJDT]
-
-        ### 2. 🏭 Matrice de Maturité Industrie 4.0
-        Génère UN SEUL grand tableau Markdown évaluant TOUTES les tâches sur les 9 piliers.
-        Colonnes : Tâche | Big Data | Robots | Simul | Intégr | IIoT | Cyber | Cloud | Additif | RA | Justification.
-
-        ### 3. SCORES_JSON
-        Moyenne globale 1-5 pour le radar.
-        ```json
-        {{ "Big Data": 0, "Robots Autonomes": 0, "Simulation": 0, "Intégration Systèmes": 0, "IIoT": 0, "Cybersécurité": 0, "Cloud": 0, "Fabrication Additive": 0, "Réalité Augmentée": 0 }}
-        ```
+        * **Objet Technique SAP :** [Ex: Étape de route dans OF (OWOR) / Déclaration (OIGN) / Livraison (ODLN)]
+        * **Chemin Menu Standard :** [Chemin exact dans SAP B1 10.0]
+        * **Données Maîtres (Master Data) :** [Nomenclatures, Articles, Ressources ou Partenaires requis]
+        * **Détail de l'Action & Impact :** [Description précise des champs à remplir et impact sur les tables OITW (Stock) et OJDT (Comptabilité)]
+        * **Note de personnalisation :** [Propose un UDF si le standard est incomplet]
         """
         response = client.models.generate_content(
             model=MODEL_NAME, contents=prompt,
@@ -131,29 +117,19 @@ if check_password():
     # ==========================================
     # 🏁 UI PRINCIPALE
     # ==========================================
-    st.title("🏭 Hub d'Architecture : BPMN ➔ SAP B1")
-    uploaded_file = st.file_uploader("Importez votre BPMN (.bpmn, .xml)", type=['bpmn', 'xml'])
+    st.title("🏭 Hub d'Analyse Métier ➔ Architecture SAP B1")
+    st.write("Importez votre fichier BPMN pour générer le rapport d'implémentation technique.")
+    
+    uploaded_file = st.file_uploader("Fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
     if uploaded_file:
-        if st.button("🚀 Lancer l'Analyse Métier & 4.0", type="primary"):
-            with st.spinner("Analyse approfondie en cours..."):
-                t_txt, f_txt = parse_bpmn_from_file(uploaded_file)
-                report = generate_full_analysis(t_txt, f_txt)
-                
-                # Extraction Radar
-                json_match = re.search(r'```json\n(.*?)\n```', report, re.DOTALL)
-                clean_report = re.sub(r'### 3\. SCORES_JSON.*', '', report, flags=re.DOTALL)
-                
-                col_text, col_radar = st.columns([2, 1])
-                with col_text:
-                    st.markdown(clean_report)
-                
-                with col_radar:
-                    if json_match:
-                        st.subheader("📈 Radar de Maturité")
-                        scores = json.loads(json_match.group(1))
-                        df = pd.DataFrame(dict(r=list(scores.values()), theta=list(scores.keys())))
-                        fig = px.line_polar(df, r='r', theta='theta', line_close=True, range_r=[0,5])
-                        fig.update_traces(fill='toself', line_color='#ff7f0e')
-                        st.plotly_chart(fig, use_container_width=True)
-                        st.dataframe(pd.DataFrame(list(scores.items()), columns=['Pilier', 'Note']), hide_index=True)
+        if st.button("🚀 Générer l'Analyse & Intégration SAP", type="primary"):
+            with st.spinner("L'architecte senior rédige votre rapport (Gemini 1.5 Pro)..."):
+                tasks_txt, flows_txt = parse_bpmn_from_file(uploaded_file)
+                if tasks_txt:
+                    report = generate_detailed_analysis(tasks_txt, flows_txt)
+                    st.success("Rapport généré avec succès. Vous pouvez l'imprimer avec Ctrl+P.")
+                    st.divider()
+                    st.markdown(report)
+                else:
+                    st.error("Impossible d'analyser le fichier. Vérifiez le format BPMN.")
