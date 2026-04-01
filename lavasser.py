@@ -203,3 +203,84 @@ if check_password():
 
     with tab1:
         st.write("Importez votre processus. 🖨️ *Astuce : Faites Ctrl+P pour imprimer un rapport propre une fois généré.*")
+        uploaded_file = st.file_uploader("Importez votre fichier .bpmn ou .xml", type=['bpmn', 'xml'])
+
+        if uploaded_file is not None:
+            if st.button("Lancer l'évaluation complète", type="primary"):
+                with st.spinner("Analyse et génération du radar en cours..."):
+                    tasks_text, flows_text = parse_bpmn_from_file(uploaded_file)
+                    
+                    if tasks_text is None:
+                        st.error(flows_text)
+                    else:
+                        st.session_state.bpmn_context = f"TÂCHES:\n{tasks_text}\n\nFLUX:\n{flows_text}"
+                        
+                        try:
+                            report = generate_full_analysis(tasks_text, flows_text)
+                            
+                            json_match = re.search(r'```json\n(.*?)\n```', report, re.DOTALL)
+                            clean_report = re.sub(r'### 5\. SCORES_JSON.*', '', report, flags=re.DOTALL)
+                            
+                            st.success("Analyse générée ! Vous pouvez imprimer cette page (Ctrl+P) ou (Cmd+P sur Mac).")
+                            
+                            col_text, col_radar = st.columns([2, 1])
+                            
+                            with col_text:
+                                st.markdown(clean_report)
+                                
+                            with col_radar:
+                                if json_match:
+                                    json_data = json_match.group(1)
+                                    
+                                    st.subheader("📊 Scores Globaux (9 Piliers)")
+                                    
+                                    try:
+                                        scores_dict = json.loads(json_data)
+                                        df_scores = pd.DataFrame(list(scores_dict.items()), columns=['Pilier 4.0', 'Note globale'])
+                                        st.dataframe(df_scores, hide_index=True, use_container_width=True)
+                                    except Exception as e:
+                                        st.error(f"Erreur d'affichage : {e}")
+
+                                    fig = draw_radar_chart(json_data)
+                                    if fig:
+                                        st.plotly_chart(fig, use_container_width=True)
+                                else:
+                                    st.warning("Le graphique radar n'a pas pu être généré (Rapport coupé avant la fin).")
+                                    
+                        except Exception as e:
+                            st.error(f"🔴 Une erreur de connexion à l'IA s'est produite : {e}")
+
+    with tab2:
+        st.header("Discutez avec votre Consultant SAP B1")
+        
+        for message in st.session_state.chat_history:
+            with st.chat_message(message["role"]):
+                st.markdown(message["content"])
+
+        if user_prompt := st.chat_input("Posez votre question sur SAP B1..."):
+            if not st.session_state.bpmn_context:
+                st.warning("Veuillez d'abord analyser un fichier BPMN dans l'onglet 'Évaluation & Radar'.")
+            else:
+                with st.chat_message("user"):
+                    st.markdown(user_prompt)
+                st.session_state.chat_history.append({"role": "user", "content": user_prompt})
+
+                chat_context = f"""
+                Tu es un consultant expert SAP Business One 10.0. L'utilisateur te pose une question sur son processus métier.
+                Voici les données de son processus actuel :
+                {st.session_state.bpmn_context}
+                
+                Réponds de manière technique et directement applicable dans SAP B1 10.0.
+                Question : {user_prompt}
+                """
+
+                with st.chat_message("assistant"):
+                    with st.spinner("Réflexion..."):
+                        try:
+                            genai.configure(api_key=API_KEY)
+                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            response = model.generate_content(chat_context)
+                            st.markdown(response.text)
+                            st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                        except Exception as e:
+                            st.error(f"🔴 Une erreur de connexion à l'IA s'est produite : {e}")
