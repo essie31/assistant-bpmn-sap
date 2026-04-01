@@ -56,8 +56,8 @@ if check_password():
     GROQ_API_KEY = st.secrets["GROQ_API_KEY"]
     client = Groq(api_key=GROQ_API_KEY)
     
-    # On utilise Mixtral : très intelligent pour le code/markdown, et offre 500 000 tokens/jour gratuits !
-    MODEL_NAME = "mixtral-8x7b-32768"
+    # ✅ LE MODÈLE ACTIF, RAPIDE ET AVEC UN ÉNORME QUOTA GRATUIT
+    MODEL_NAME = "llama-3.1-8b-instant"
 
     PILIERS = {
         1: "Big Data & Analytics", 2: "Robots Autonomes", 3: "Simulation",
@@ -180,7 +180,7 @@ if check_password():
             full_markdown += f"### 📊 Pilier : {pillar_name}\n\n"
             full_markdown += response.choices[0].message.content.strip() + "\n\n---\n\n"
             
-            # Pause de 2 secondes pour éviter l'erreur 429 de Rate Limit sur l'API Groq (30 requêtes par minute)
+            # Pause de 2 secondes pour éviter l'erreur 429 de Rate Limit
             time.sleep(2)
             
         my_bar.progress(1.0, text="✅ Les 9 tableaux sont générés !")
@@ -249,7 +249,7 @@ if check_password():
     tab1, tab2 = st.tabs(["📊 Évaluation en 3 Étapes", "💬 Assistant SAP"])
 
     with tab1:
-        st.write("Importez votre processus. Propulsé par Groq **Mixtral 8x7B** ⚡.")
+        st.write("Importez votre processus. Propulsé par Groq **Llama 3.1 8B** ⚡.")
         uploaded_file = st.file_uploader("Fichier .bpmn ou .xml", type=['bpmn', 'xml'])
 
         if uploaded_file is not None:
